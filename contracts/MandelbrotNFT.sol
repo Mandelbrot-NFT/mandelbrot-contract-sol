@@ -11,6 +11,8 @@ import "hardhat/console.sol";
 contract MandelbrotNFT is ERC1155, Ownable {
     using Counters for Counters.Counter;
 
+    uint256 public constant FUEL = 0;
+
     struct Field {
         uint256 min_x;
         uint256 min_y;
@@ -31,6 +33,9 @@ contract MandelbrotNFT is ERC1155, Ownable {
     mapping(uint256 => uint256[]) private _children;
 
     constructor() ERC1155("") {
+        _mint(msg.sender, FUEL, 10**18, "");
+        _tokenIds.increment();
+
         Field memory field = Field(0, 0, 4000000000000000000, 4000000000000000000);
         uint256 newItemId = _tokenIds.current();
         _mint(msg.sender, newItemId, 1, "");
@@ -50,6 +55,23 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     function mintNFT(uint256 parentId, address recipient, Field memory field) public onlyOwner returns (uint256) {
         require(_children[parentId].length < 5, "A maximum of 20 child NFTs can be minted.");
+        Field memory parent_field = _tokenFields[parentId];
+        require(
+            parent_field.min_x <= field.min_x && field.max_x <= parent_field.max_x &&
+            parent_field.min_y <= field.min_y && field.max_y <= parent_field.max_y,
+            "NFT has to be within the bounds of its parent."
+        );
+        uint256[] memory children = _children[parentId];
+        for (uint i = 0; i < children.length; i++) {
+            Field memory sibling_field = _tokenFields[children[i]];
+            require(
+                field.min_x > sibling_field.max_x ||
+                field.max_x < sibling_field.min_x ||
+                field.min_y > sibling_field.max_y ||
+                field.max_y < sibling_field.min_y,
+                "NFTs cannot overlap."
+            );
+        }
 
         _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
@@ -65,7 +87,11 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return _fields;
     }
 
-    function get_children(uint256 parentId) public view virtual returns (Metadata[] memory) {
+    function getMetadata(uint256 tokenId) public view virtual returns (Metadata memory) {
+        return Metadata(tokenId, 0, _tokenFields[tokenId]);
+    }
+
+    function getChildrenMetadata(uint256 parentId) public view virtual returns (Metadata[] memory) {
         uint256[] memory children = _children[parentId];
         Metadata[] memory result = new Metadata[](children.length);
         for (uint i = 0; i < children.length; i++) {
