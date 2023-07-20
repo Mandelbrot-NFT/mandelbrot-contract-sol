@@ -20,82 +20,83 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 max_y;
     }
 
+    struct Node {
+        uint256 parentId;
+        Field field;
+        uint256 minimumPrice;
+    }
+
     struct Metadata {
         uint256 tokenId;
         uint256 parentId;
         Field field;
+        uint256 minimumPrice;
     }
 
     Counters.Counter private _tokenIds;
-    mapping(uint256 => string) private _tokenURIs;
-    Field[] private _fields;
-    mapping(uint256 => Field) private _tokenFields;
+    mapping(uint256 => Node) private _nodes;
     mapping(uint256 => uint256[]) private _children;
 
     constructor() ERC1155("") {
-        _mint(msg.sender, FUEL, 10**18, "");
-        _tokenIds.increment();
-
+        _mint(msg.sender, FUEL, 10000 * 10 ** 18, "");
         Field memory field = Field(0, 0, 4000000000000000000, 4000000000000000000);
+        _mintInternal(0, msg.sender, field, 10 * 10 ** 18);
+    }
+
+    function _setNode(uint256 tokenId, uint256 parentId, Field memory field, uint256 minimumPrice) internal virtual {
+        _nodes[tokenId] = Node(parentId, field, minimumPrice);
+    }
+
+    function _mintInternal(uint256 parentId, address recipient, Field memory field, uint256 minimumPrice) internal virtual returns (uint256) {
+        require(_nodes[parentId].minimumPrice <= minimumPrice, "Child's minimum price has to be at least as much as parent's.");
+        _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
-        _mint(msg.sender, newItemId, 1, "");
-        _setTokenURI(newItemId, string.concat(Strings.toString(field.min_x), ",", Strings.toString(field.min_y), ":",
-                                              Strings.toString(field.max_x), ",", Strings.toString(field.max_y)));
-        _setTokenField(newItemId, field);
+        _mint(recipient, newItemId, 1, "");
+        _setNode(newItemId, parentId, field, minimumPrice);
+        return newItemId;
     }
 
-    function _setTokenURI(uint256 tokenId, string memory _tokenURI) internal virtual {
-        _tokenURIs[tokenId] = _tokenURI;
-    }
-
-    function _setTokenField(uint256 tokenId, Field memory _field) internal virtual {
-        _fields.push(_field);
-        _tokenFields[tokenId] = _field;
-    }
-
-    function mintNFT(uint256 parentId, address recipient, Field memory field) public onlyOwner returns (uint256) {
+    function mintNFT(uint256 parentId, address recipient, Field memory field) public returns (uint256) {
         require(_children[parentId].length < 5, "A maximum of 20 child NFTs can be minted.");
-        Field memory parent_field = _tokenFields[parentId];
+        Node memory parentNode = _nodes[parentId];
+        Field memory parentField = parentNode.field;
         require(
-            parent_field.min_x <= field.min_x && field.max_x <= parent_field.max_x &&
-            parent_field.min_y <= field.min_y && field.max_y <= parent_field.max_y,
+            parentField.min_x <= field.min_x && field.max_x <= parentField.max_x &&
+            parentField.min_y <= field.min_y && field.max_y <= parentField.max_y,
             "NFT has to be within the bounds of its parent."
         );
         uint256[] memory children = _children[parentId];
         for (uint i = 0; i < children.length; i++) {
-            Field memory sibling_field = _tokenFields[children[i]];
+            Field memory siblingField = _nodes[children[i]].field;
             require(
-                field.min_x > sibling_field.max_x ||
-                field.max_x < sibling_field.min_x ||
-                field.min_y > sibling_field.max_y ||
-                field.max_y < sibling_field.min_y,
+                field.min_x > siblingField.max_x ||
+                field.max_x < siblingField.min_x ||
+                field.min_y > siblingField.max_y ||
+                field.max_y < siblingField.min_y,
                 "NFTs cannot overlap."
             );
         }
 
-        _tokenIds.increment();
-        uint256 newItemId = _tokenIds.current();
-        _mint(recipient, newItemId, 1, "");
-        _setTokenURI(newItemId, string.concat(Strings.toString(field.min_x), ",", Strings.toString(field.min_y), ":",
-                                              Strings.toString(field.max_x), ",", Strings.toString(field.max_y)));
-        _setTokenField(newItemId, field);
+        uint256 newItemId = _mintInternal(parentId, recipient, field, parentNode.minimumPrice);
         _children[parentId].push(newItemId);
         return newItemId;
     }
 
-    function fields() public view virtual returns (Field[] memory) {
-        return _fields;
+    function setMinimumPrice(uint256 tokenId, uint256 price) public {
+        _nodes[tokenId].minimumPrice = price;
     }
 
     function getMetadata(uint256 tokenId) public view virtual returns (Metadata memory) {
-        return Metadata(tokenId, 0, _tokenFields[tokenId]);
+        Node memory node = _nodes[tokenId];
+        return Metadata(tokenId, node.parentId, node.field, node.minimumPrice);
     }
 
     function getChildrenMetadata(uint256 parentId) public view virtual returns (Metadata[] memory) {
         uint256[] memory children = _children[parentId];
         Metadata[] memory result = new Metadata[](children.length);
         for (uint i = 0; i < children.length; i++) {
-            result[i] = (Metadata(children[i], parentId, _tokenFields[children[i]]));
+            Node memory node = _nodes[children[i]];
+            result[i] = (Metadata(children[i], parentId, node.field, node.minimumPrice));
         }
         return result;
     }
