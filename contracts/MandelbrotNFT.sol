@@ -33,9 +33,27 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 minimumPrice;
     }
 
+    struct Bid {
+        uint256 parentId;
+        Field field;
+        address recipient;
+        uint256 amount;
+    }
+
+    struct BidView {
+        uint256 bidId;
+        uint256 parentId;
+        Field field;
+        address recipient;
+        uint256 amount;
+    }
+
     Counters.Counter private _tokenIds;
+    Counters.Counter private _bidIdCounter;
     mapping(uint256 => Node) private _nodes;
     mapping(uint256 => uint256[]) private _children;
+    mapping(uint256 => Bid) private _bids;
+    mapping(uint256 => uint256[]) private _bidIds;
 
     constructor() ERC1155("") {
         _mint(msg.sender, FUEL, 10000 * 10 ** 18, "");
@@ -43,11 +61,11 @@ contract MandelbrotNFT is ERC1155, Ownable {
         _mintInternal(0, msg.sender, field, 10 * 10 ** 18);
     }
 
-    function _setNode(uint256 tokenId, uint256 parentId, Field memory field, uint256 minimumPrice) internal virtual {
+    function _setNode(uint256 tokenId, uint256 parentId, Field memory field, uint256 minimumPrice) internal {
         _nodes[tokenId] = Node(parentId, field, minimumPrice);
     }
 
-    function _mintInternal(uint256 parentId, address recipient, Field memory field, uint256 minimumPrice) internal virtual returns (uint256) {
+    function _mintInternal(uint256 parentId, address recipient, Field memory field, uint256 minimumPrice) internal returns (uint256) {
         require(_nodes[parentId].minimumPrice <= minimumPrice, "Child's minimum price has to be at least as much as parent's.");
         _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
@@ -56,8 +74,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return newItemId;
     }
 
-    function mintNFT(uint256 parentId, address recipient, Field memory field) public returns (uint256) {
-        require(_children[parentId].length < 5, "A maximum of 20 child NFTs can be minted.");
+    modifier validBounds(uint256 parentId, Field memory field) {
         Node memory parentNode = _nodes[parentId];
         Field memory parentField = parentNode.field;
         require(
@@ -76,22 +93,50 @@ contract MandelbrotNFT is ERC1155, Ownable {
                 "NFTs cannot overlap."
             );
         }
+        _;
+    }
 
-        uint256 newItemId = _mintInternal(parentId, recipient, field, parentNode.minimumPrice);
+    function bid(uint256 parentId, address recipient, Field memory field, uint256 amount) validBounds(parentId, field) public returns (uint256) {
+        require(_nodes[parentId].minimumPrice <= amount, "Bid must exceed minimum mint price.");
+
+        _burn(msg.sender, FUEL, amount);
+        // _safeTransferFrom(msg.sender, address(this), FUEL, amount, "");
+
+        _bidIdCounter.increment();
+        uint256 newBidId = _bidIdCounter.current();
+        _bids[newBidId] = Bid(parentId, field, recipient, amount);
+        _bidIds[parentId].push(newBidId);
+        return newBidId;
+    }
+
+    function getBids(uint256 parentId) public view returns (BidView[] memory)  {
+        uint256[] memory bidIds = _bidIds[parentId];
+        BidView[] memory result = new BidView[](bidIds.length);
+        for (uint i = 0; i < bidIds.length; i++) {
+            Bid memory bid_ = _bids[bidIds[i]];
+            result[i] = (BidView(bidIds[i], parentId, bid_.field, bid_.recipient, bid_.amount));
+        }
+        return result;
+    }
+
+    // function cancelBid - can be done either by bidder or parent NFT owner, releases funds
+
+    // function approveBid - mints the NFT
+
+    function mintNFT(uint256 parentId, address recipient, Field memory field) validBounds(parentId, field) public returns (uint256) {
+        require(_children[parentId].length < 5, "A maximum of 20 child NFTs can be minted.");
+
+        uint256 newItemId = _mintInternal(parentId, recipient, field, _nodes[parentId].minimumPrice);
         _children[parentId].push(newItemId);
         return newItemId;
     }
 
-    function setMinimumPrice(uint256 tokenId, uint256 price) public {
-        _nodes[tokenId].minimumPrice = price;
-    }
-
-    function getMetadata(uint256 tokenId) public view virtual returns (Metadata memory) {
+    function getMetadata(uint256 tokenId) public view returns (Metadata memory) {
         Node memory node = _nodes[tokenId];
         return Metadata(tokenId, node.parentId, node.field, node.minimumPrice);
     }
 
-    function getChildrenMetadata(uint256 parentId) public view virtual returns (Metadata[] memory) {
+    function getChildrenMetadata(uint256 parentId) public view returns (Metadata[] memory) {
         uint256[] memory children = _children[parentId];
         Metadata[] memory result = new Metadata[](children.length);
         for (uint i = 0; i < children.length; i++) {
@@ -99,5 +144,9 @@ contract MandelbrotNFT is ERC1155, Ownable {
             result[i] = (Metadata(children[i], parentId, node.field, node.minimumPrice));
         }
         return result;
+    }
+
+    function setMinimumPrice(uint256 tokenId, uint256 price) public {
+        _nodes[tokenId].minimumPrice = price;
     }
 }
