@@ -143,7 +143,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     // function cancelBid - can be done either by bidder or parent NFT owner, releases funds
 
-    function approveBid(uint256 bidId) public returns (uint256) {
+    function approve(uint256 bidId) public returns (uint256) {
         Bid memory bid_ = _bids[bidId];
         uint256 parentId = bid_.parentId;
         require(msg.sender == _nodes[parentId].owner, "Only the owner of parent NFT can approve the bid.");
@@ -158,7 +158,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
         delete _bids[bidId];
         uint256[] storage bidIds = _bidIds[parentId];
-        for (uint256 i; i<bidIds.length; i++) {
+        for (uint256 i; i < bidIds.length; i++) {
             if (bidIds[i] == bidId) {
                 bidIds[i] = bidIds[bidIds.length - 1];
                 bidIds.pop();
@@ -167,6 +167,14 @@ contract MandelbrotNFT is ERC1155, Ownable {
         }
 
         return newItemId;
+    }
+
+    function batchApprove(uint256[] memory bidIds) public returns (uint256[] memory) {
+        uint256[] memory tokenIds = new uint256[](bidIds.length);
+        for (uint256 i; i < bidIds.length; i++) {
+            tokenIds[i] = approve(bidIds[i]);
+        }
+        return tokenIds;
     }
 
     // For testing purposes only
