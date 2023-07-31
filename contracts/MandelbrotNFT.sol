@@ -79,8 +79,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
         }
     }
 
-    function _setNode(uint256 tokenId, uint256 parentId, Field memory field, uint256 minimumPrice) internal {
-        _nodes[tokenId] = Node(msg.sender, parentId, field, minimumPrice);
+    function _setNode(address recipient, uint256 tokenId, uint256 parentId, Field memory field, uint256 minimumPrice) internal {
+        _nodes[tokenId] = Node(recipient, parentId, field, minimumPrice);
     }
 
     function _mintInternal(uint256 parentId, address recipient, Field memory field, uint256 minimumPrice) internal returns (uint256) {
@@ -88,7 +88,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
         _mint(recipient, newItemId, 1, "");
-        _setNode(newItemId, parentId, field, minimumPrice);
+        _setNode(recipient, newItemId, parentId, field, minimumPrice);
         return newItemId;
     }
 
