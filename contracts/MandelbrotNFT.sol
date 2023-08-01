@@ -29,6 +29,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     struct Metadata {
         uint256 tokenId;
+        address owner;
         uint256 parentId;
         Field field;
         uint256 minimumPrice;
@@ -188,7 +189,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     function getMetadata(uint256 tokenId) public view returns (Metadata memory) {
         Node memory node = _nodes[tokenId];
-        return Metadata(tokenId, node.parentId, node.field, node.minimumPrice);
+        return Metadata(tokenId, node.owner, node.parentId, node.field, node.minimumPrice);
     }
 
     function getChildrenMetadata(uint256 parentId) public view returns (Metadata[] memory) {
@@ -196,7 +197,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         Metadata[] memory result = new Metadata[](children.length);
         for (uint i = 0; i < children.length; i++) {
             Node memory node = _nodes[children[i]];
-            result[i] = (Metadata(children[i], parentId, node.field, node.minimumPrice));
+            result[i] = (Metadata(children[i], node.owner, parentId, node.field, node.minimumPrice));
         }
         return result;
     }
