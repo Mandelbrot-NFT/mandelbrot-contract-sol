@@ -13,6 +13,12 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     uint256 public constant FUEL = 0;
 
+    uint256 public constant TOTAL_SUPPLY = 10000 * 10 ** 18;
+    uint256 public constant BASE_MINIMUM_BID = 10 * 10 ** 18;
+    uint256 public constant MAX_CHILDREN = 5;
+    uint256 public constant PARENT_SHARE = 10;
+    uint256 public constant UPSTREAM_SHARE = 50;
+
     struct Field {
         uint256 min_x;
         uint256 min_y;
@@ -24,6 +30,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         address owner;
         uint256 parentId;
         Field field;
+        uint256 lockedFuel;
         uint256 minimumPrice;
     }
 
@@ -32,6 +39,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         address owner;
         uint256 parentId;
         Field field;
+        uint256 lockedFuel;
         uint256 minimumPrice;
     }
 
@@ -58,9 +66,9 @@ contract MandelbrotNFT is ERC1155, Ownable {
     mapping(uint256 => uint256[]) private _bidIds;
 
     constructor() ERC1155("") {
-        _mint(msg.sender, FUEL, 10000 * 10 ** 18, "");
+        _mint(msg.sender, FUEL, TOTAL_SUPPLY, "");
         Field memory field = Field(0, 0, 4000000000000000000, 4000000000000000000);
-        _mintInternal(0, msg.sender, field, 10 * 10 ** 18);
+        _mintInternal(0, msg.sender, field, 0, BASE_MINIMUM_BID);
     }
 
     function _afterTokenTransfer(
@@ -80,16 +88,29 @@ contract MandelbrotNFT is ERC1155, Ownable {
         }
     }
 
-    function _setNode(address recipient, uint256 tokenId, uint256 parentId, Field memory field, uint256 minimumPrice) internal {
-        _nodes[tokenId] = Node(recipient, parentId, field, minimumPrice);
+    function _setNode(
+        uint256 tokenId,
+        address recipient,
+        uint256 parentId,
+        Field memory field,
+        uint256 lockedFuel,
+        uint256 minimumPrice
+    ) internal {
+        _nodes[tokenId] = Node(recipient, parentId, field, lockedFuel, minimumPrice);
     }
 
-    function _mintInternal(uint256 parentId, address recipient, Field memory field, uint256 minimumPrice) internal returns (uint256) {
+    function _mintInternal(
+        uint256 parentId,
+        address recipient,
+        Field memory field,
+        uint256 lockedFuel,
+        uint256 minimumPrice
+    ) internal returns (uint256) {
         require(_nodes[parentId].minimumPrice <= minimumPrice, "Child's minimum price has to be at least as much as parent's.");
         _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
         _mint(recipient, newItemId, 1, "");
-        _setNode(recipient, newItemId, parentId, field, minimumPrice);
+        _setNode(newItemId, recipient, parentId, field, lockedFuel, minimumPrice);
         return newItemId;
     }
 
@@ -148,13 +169,20 @@ contract MandelbrotNFT is ERC1155, Ownable {
         Bid memory bid_ = _bids[bidId];
         uint256 parentId = bid_.parentId;
         require(msg.sender == _nodes[parentId].owner, "Only the owner of parent NFT can approve the bid.");
-        require(_children[parentId].length < 5, "A maximum of 20 child NFTs can be minted.");
+        require(_children[parentId].length < MAX_CHILDREN, string.concat("A maximum of ", Strings.toString(MAX_CHILDREN)," child NFTs can be minted."));
         _validateBounds(parentId, bid_.field);
 
-        // TODO: hierarchical compensation
-        _mint(_nodes[bid_.parentId].owner, FUEL, bid_.amount, "");
+        uint256 payout = bid_.amount * PARENT_SHARE / 100;
+        uint256 remainder = bid_.amount;
+        uint256 ancestorId = bid_.parentId;
+        do {
+            remainder -= payout;
+            _mint(_nodes[ancestorId].owner, FUEL, payout, "");
+            ancestorId = _nodes[ancestorId].parentId;
+            payout = payout * UPSTREAM_SHARE / 100;
+        } while (ancestorId != 0);
 
-        uint256 newItemId = _mintInternal(parentId, bid_.recipient, bid_.field, _nodes[parentId].minimumPrice);
+        uint256 newItemId = _mintInternal(parentId, bid_.recipient, bid_.field, remainder, _nodes[parentId].minimumPrice);
         _children[parentId].push(newItemId);
 
         delete _bids[bidId];
@@ -180,7 +208,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     // For testing purposes only
     // function mintNFT(uint256 parentId, address recipient, Field memory field) validBounds(parentId, field) public returns (uint256) {
-    //     require(_children[parentId].length < 5, "A maximum of 20 child NFTs can be minted.");
+    //     require(_children[parentId].length < MAX_CHILDREN, string.concat("A maximum of ", Strings.toString(MAX_CHILDREN)," child NFTs can be minted."));
 
     //     uint256 newItemId = _mintInternal(parentId, recipient, field, _nodes[parentId].minimumPrice);
     //     _children[parentId].push(newItemId);
@@ -189,7 +217,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     function getMetadata(uint256 tokenId) public view returns (Metadata memory) {
         Node memory node = _nodes[tokenId];
-        return Metadata(tokenId, node.owner, node.parentId, node.field, node.minimumPrice);
+        return Metadata(tokenId, node.owner, node.parentId, node.field, node.lockedFuel, node.minimumPrice);
     }
 
     function getChildrenMetadata(uint256 parentId) public view returns (Metadata[] memory) {
@@ -197,7 +225,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         Metadata[] memory result = new Metadata[](children.length);
         for (uint i = 0; i < children.length; i++) {
             Node memory node = _nodes[children[i]];
-            result[i] = (Metadata(children[i], node.owner, parentId, node.field, node.minimumPrice));
+            result[i] = (Metadata(children[i], node.owner, parentId, node.field, node.lockedFuel, node.minimumPrice));
         }
         return result;
     }
