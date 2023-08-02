@@ -140,6 +140,19 @@ contract MandelbrotNFT is ERC1155, Ownable {
         _;
     }
 
+    function _deleteBid(uint256 bidId) internal {
+        uint256[] storage bidIds = _bidIds[_bids[bidId].parentId];
+        for (uint256 i; i < bidIds.length; i++) {
+            if (bidIds[i] == bidId) {
+                bidIds[i] = bidIds[bidIds.length - 1];
+                bidIds.pop();
+                break;
+            }
+        }
+        _mint(_bids[bidId].recipient, FUEL, _bids[bidId].amount, "");
+        delete _bids[bidId];
+    }
+
     function bid(uint256 parentId, address recipient, Field memory field, uint256 amount) validBounds(parentId, field) public returns (uint256) {
         require(_nodes[parentId].minimumPrice <= amount, "Bid must exceed minimum mint price.");
 
@@ -185,7 +198,6 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 newItemId = _mintInternal(parentId, bid_.recipient, bid_.field, remainder, _nodes[parentId].minimumPrice);
         _children[parentId].push(newItemId);
 
-        delete _bids[bidId];
         uint256[] storage bidIds = _bidIds[parentId];
         for (uint256 i; i < bidIds.length; i++) {
             if (bidIds[i] == bidId) {
@@ -194,6 +206,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
                 break;
             }
         }
+        delete _bids[bidId];
 
         return newItemId;
     }
@@ -204,6 +217,11 @@ contract MandelbrotNFT is ERC1155, Ownable {
             tokenIds[i] = approve(bidIds[i]);
         }
         return tokenIds;
+    }
+
+    function deleteBid(uint256 bidId) public {
+        require(msg.sender == _bids[bidId].recipient, "Only the bid creator can delete it.");
+        _deleteBid(bidId);
     }
 
     // For testing purposes only
