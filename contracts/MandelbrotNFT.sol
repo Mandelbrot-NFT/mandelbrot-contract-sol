@@ -31,7 +31,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 parentId;
         Field field;
         uint256 lockedFuel;
-        uint256 minimumPrice;
+        uint256 minimumBid;
     }
 
     struct Metadata {
@@ -40,7 +40,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 parentId;
         Field field;
         uint256 lockedFuel;
-        uint256 minimumPrice;
+        uint256 minimumBid;
     }
 
     struct Bid {
@@ -48,6 +48,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         Field field;
         address recipient;
         uint256 amount;
+        uint256 minimumBid;
     }
 
     struct BidView {
@@ -56,6 +57,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         Field field;
         address recipient;
         uint256 amount;
+        uint256 minimumBid;
     }
 
     Counters.Counter private _tokenIds;
@@ -94,9 +96,9 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 parentId,
         Field memory field,
         uint256 lockedFuel,
-        uint256 minimumPrice
+        uint256 minimumBid
     ) internal {
-        _nodes[tokenId] = Node(recipient, parentId, field, lockedFuel, minimumPrice);
+        _nodes[tokenId] = Node(recipient, parentId, field, lockedFuel, minimumBid);
     }
 
     function _mintInternal(
@@ -104,13 +106,13 @@ contract MandelbrotNFT is ERC1155, Ownable {
         address recipient,
         Field memory field,
         uint256 lockedFuel,
-        uint256 minimumPrice
+        uint256 minimumBid
     ) internal returns (uint256) {
-        require(_nodes[parentId].minimumPrice <= minimumPrice, "Child's minimum price has to be at least as much as parent's.");
+        require(minimumBid >= _nodes[parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
         _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
         _mint(recipient, newItemId, 1, "");
-        _setNode(newItemId, recipient, parentId, field, lockedFuel, minimumPrice);
+        _setNode(newItemId, recipient, parentId, field, lockedFuel, minimumBid);
         return newItemId;
     }
 
@@ -153,15 +155,22 @@ contract MandelbrotNFT is ERC1155, Ownable {
         delete _bids[bidId];
     }
 
-    function bid(uint256 parentId, address recipient, Field memory field, uint256 amount) validBounds(parentId, field) public returns (uint256) {
-        require(_nodes[parentId].minimumPrice <= amount, "Bid must exceed minimum mint price.");
+    function bid(
+        uint256 parentId,
+        address recipient,
+        Field memory field,
+        uint256 amount,
+        uint256 minimumBid
+    ) validBounds(parentId, field) public returns (uint256) {
+        require(amount >= _nodes[parentId].minimumBid, "Bid must exceed or equal minimum bid price.");
+        require(minimumBid >= _nodes[parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
 
         _burn(msg.sender, FUEL, amount);
         // _safeTransferFrom(msg.sender, address(this), FUEL, amount, "");
 
         _bidIdCounter.increment();
         uint256 newBidId = _bidIdCounter.current();
-        _bids[newBidId] = Bid(parentId, field, recipient, amount);
+        _bids[newBidId] = Bid(parentId, field, recipient, amount, minimumBid);
         _bidIds[parentId].push(newBidId);
         return newBidId;
     }
@@ -171,7 +180,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         BidView[] memory result = new BidView[](bidIds.length);
         for (uint i = 0; i < bidIds.length; i++) {
             Bid memory bid_ = _bids[bidIds[i]];
-            result[i] = (BidView(bidIds[i], parentId, bid_.field, bid_.recipient, bid_.amount));
+            result[i] = (BidView(bidIds[i], parentId, bid_.field, bid_.recipient, bid_.amount, bid_.minimumBid));
         }
         return result;
     }
@@ -193,7 +202,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
             payout = payout * UPSTREAM_SHARE / 100;
         } while (ancestorId != 0);
 
-        uint256 newItemId = _mintInternal(parentId, bid_.recipient, bid_.field, remainder, _nodes[parentId].minimumPrice);
+        uint256 newItemId = _mintInternal(parentId, bid_.recipient, bid_.field, remainder, bid_.minimumBid);
         _children[parentId].push(newItemId);
 
         uint256[] storage bidIds = _bidIds[parentId];
@@ -226,7 +235,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
     // function mintNFT(uint256 parentId, address recipient, Field memory field) validBounds(parentId, field) public returns (uint256) {
     //     require(_children[parentId].length < MAX_CHILDREN, string.concat("A maximum of ", Strings.toString(MAX_CHILDREN)," child NFTs can be minted."));
 
-    //     uint256 newItemId = _mintInternal(parentId, recipient, field, _nodes[parentId].minimumPrice);
+    //     uint256 newItemId = _mintInternal(parentId, recipient, field, _nodes[parentId].minimumBid);
     //     _children[parentId].push(newItemId);
     //     return newItemId;
     // }
@@ -256,7 +265,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     function getMetadata(uint256 tokenId) public view returns (Metadata memory) {
         Node memory node = _nodes[tokenId];
-        return Metadata(tokenId, node.owner, node.parentId, node.field, node.lockedFuel, node.minimumPrice);
+        return Metadata(tokenId, node.owner, node.parentId, node.field, node.lockedFuel, node.minimumBid);
     }
 
     function getChildrenMetadata(uint256 parentId) public view returns (Metadata[] memory) {
@@ -264,13 +273,13 @@ contract MandelbrotNFT is ERC1155, Ownable {
         Metadata[] memory result = new Metadata[](children.length);
         for (uint i = 0; i < children.length; i++) {
             Node memory node = _nodes[children[i]];
-            result[i] = (Metadata(children[i], node.owner, parentId, node.field, node.lockedFuel, node.minimumPrice));
+            result[i] = (Metadata(children[i], node.owner, parentId, node.field, node.lockedFuel, node.minimumBid));
         }
         return result;
     }
 
-    function setMinimumPrice(uint256 tokenId, uint256 price) public {
-        require(price >= _nodes[_nodes[tokenId].parentId].minimumPrice, "Child's minimum price must be more than parent's minimum price.");
-        _nodes[tokenId].minimumPrice = price;
+    function setminimumBid(uint256 tokenId, uint256 minimumBid) public {
+        require(minimumBid >= _nodes[_nodes[tokenId].parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
+        _nodes[tokenId].minimumBid = minimumBid;
     }
 }
