@@ -278,6 +278,24 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return result;
     }
 
+    function getAncestryMetadata(uint256 tokenId) public view returns (Metadata[] memory) {
+        uint depth = 0;
+        uint256 ancestorId = tokenId;
+        do {
+            depth += 1;
+            ancestorId = _nodes[ancestorId].parentId;
+        } while (ancestorId != 0);
+
+        Metadata[] memory result = new Metadata[](depth);
+        ancestorId = tokenId;
+        for (uint i = 0; i < depth; i++) {
+            Node memory node = _nodes[ancestorId];
+            result[i] = (Metadata(ancestorId, node.owner, node.parentId, node.field, node.lockedFuel, node.minimumBid));
+            ancestorId = node.parentId;
+        }
+        return result;
+    }
+
     function setminimumBid(uint256 tokenId, uint256 minimumBid) public {
         require(minimumBid >= _nodes[_nodes[tokenId].parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
         _nodes[tokenId].minimumBid = minimumBid;
