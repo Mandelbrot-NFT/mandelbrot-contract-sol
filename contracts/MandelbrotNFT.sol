@@ -69,7 +69,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     constructor() ERC1155("") {
         _mint(msg.sender, FUEL, TOTAL_SUPPLY, "");
-        Field memory field = Field(0, 0, 4000000000000000000, 4000000000000000000);
+        Field memory field = Field(0, 0, 3000000000000000000, 3000000000000000000);
         _mintInternal(0, msg.sender, field, 0, BASE_MINIMUM_BID);
     }
 
