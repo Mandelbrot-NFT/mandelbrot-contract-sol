@@ -116,6 +116,11 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return newItemId;
     }
 
+    modifier tokenExists(uint256 tokenId) {
+        require(_nodes[tokenId].minimumBid > 0, "NFT doesn't exist.");
+        _;
+    }
+
     function _validateBounds(uint256 parentId, Field memory field) internal view {
         Node memory parentNode = _nodes[parentId];
         Field memory parentField = parentNode.field;
@@ -175,7 +180,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return newBidId;
     }
 
-    function getBids(uint256 parentId) public view returns (BidView[] memory)  {
+    function getBids(uint256 parentId) tokenExists(parentId) public view returns (BidView[] memory) {
         uint256[] memory bidIds = _bidIds[parentId];
         BidView[] memory result = new BidView[](bidIds.length);
         for (uint i = 0; i < bidIds.length; i++) {
@@ -263,12 +268,12 @@ contract MandelbrotNFT is ERC1155, Ownable {
         _burn(msg.sender, tokenId, 1);
     }
 
-    function getMetadata(uint256 tokenId) public view returns (Metadata memory) {
+    function getMetadata(uint256 tokenId) tokenExists(tokenId) public view returns (Metadata memory) {
         Node memory node = _nodes[tokenId];
         return Metadata(tokenId, node.owner, node.parentId, node.field, node.lockedFuel, node.minimumBid);
     }
 
-    function getChildrenMetadata(uint256 parentId) public view returns (Metadata[] memory) {
+    function getChildrenMetadata(uint256 parentId) tokenExists(parentId) public view returns (Metadata[] memory) {
         uint256[] memory children = _children[parentId];
         Metadata[] memory result = new Metadata[](children.length);
         for (uint i = 0; i < children.length; i++) {
@@ -278,7 +283,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return result;
     }
 
-    function getAncestryMetadata(uint256 tokenId) public view returns (Metadata[] memory) {
+    function getAncestryMetadata(uint256 tokenId) tokenExists(tokenId) public view returns (Metadata[] memory) {
         uint depth = 0;
         uint256 ancestorId = tokenId;
         do {
