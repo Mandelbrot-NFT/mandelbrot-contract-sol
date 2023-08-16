@@ -17,9 +17,9 @@ contract MandelbrotNFT is ERC1155, Ownable {
     uint256 public constant TOTAL_SUPPLY = 10000 * 10 ** 18;
     uint256 public constant BASE_MINIMUM_BID = 10 * 10 ** 18;
     uint256 public constant MAX_CHILDREN = 5;
-    uint256 public constant MAXIMUM_FIELD_PORTION = 100;
-    uint256 public constant PARENT_SHARE = 10;
-    uint256 public constant UPSTREAM_SHARE = 50;
+    uint256 public constant MAXIMUM_FIELD_PORTION = 10; // 10%
+    uint256 public constant PARENT_SHARE = 10; // 10%
+    uint256 public constant UPSTREAM_SHARE = 50; // 50%
 
     struct Field {
         uint256 left;
@@ -122,14 +122,14 @@ contract MandelbrotNFT is ERC1155, Ownable {
         _;
     }
 
-    function _validateBounds(uint256 parentId, Field memory field) internal view {
+    function _validateField(uint256 parentId, Field memory field) internal view {
         Metadata memory parentMetadata = _metadata[parentId];
         Field memory parentField = parentMetadata.field;
         if (field.left < parentField.left ||
             field.right > parentField.right ||
             field.bottom < parentField.bottom ||
             field.top > parentField.top) revert FieldOutside();
-        if (((field.right - field.left) * (field.top - field.bottom)) /
+        if (((field.right - field.left) * (field.top - field.bottom)) * 100 /
             ((parentField.right - parentField.left) * (parentField.top - parentField.bottom)) >
             MAXIMUM_FIELD_PORTION) revert FieldTooLarge();
         uint256[] memory children = _children[parentId];
@@ -142,8 +142,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
         }
     }
 
-    modifier validBounds(uint256 parentId, Field calldata field) {
-        _validateBounds(parentId, field);
+    modifier validField(uint256 parentId, Field calldata field) {
+        _validateField(parentId, field);
         _;
     }
 
@@ -170,7 +170,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         Field calldata field,
         uint256 amount,
         uint256 minimumBid
-    ) tokenExists(parentId) validBounds(parentId, field) external returns (uint256) {
+    ) tokenExists(parentId) validField(parentId, field) external returns (uint256) {
         if (amount < _metadata[parentId].minimumBid) revert BidTooLow();
         if (minimumBid < _metadata[parentId].minimumBid) revert MinimumBidTooLow();
 
@@ -199,7 +199,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 parentId = bid_.parentId;
         if (msg.sender != _metadata[parentId].owner) revert NoRightsToApproveBid();
         if (_children[parentId].length == MAX_CHILDREN) revert TooManyChildTokens();
-        _validateBounds(parentId, bid_.field);
+        _validateField(parentId, bid_.field);
 
         uint256 payout = bid_.lockedFuel * PARENT_SHARE / 100;
         uint256 remainder = bid_.lockedFuel;
@@ -236,7 +236,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
     }
 
     // For testing purposes only
-    // function mintNFT(uint256 parentId, address recipient, Field memory field) validBounds(parentId, field) public returns (uint256) {
+    // function mintNFT(uint256 parentId, address recipient, Field memory field) validField(parentId, field) public returns (uint256) {
     //     require(_children[parentId].length < MAX_CHILDREN, string.concat("A maximum of ", Strings.toString(MAX_CHILDREN)," child NFTs can be minted."));
 
     //     uint256 newItemId = _mintInternal(parentId, recipient, field, _metadata[parentId].minimumBid);
