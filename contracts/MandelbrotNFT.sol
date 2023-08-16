@@ -17,6 +17,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
     uint256 public constant TOTAL_SUPPLY = 10000 * 10 ** 18;
     uint256 public constant BASE_MINIMUM_BID = 10 * 10 ** 18;
     uint256 public constant MAX_CHILDREN = 5;
+    uint256 public constant MAXIMUM_FIELD_PORTION = 100;
     uint256 public constant PARENT_SHARE = 10;
     uint256 public constant UPSTREAM_SHARE = 50;
 
@@ -58,8 +59,9 @@ contract MandelbrotNFT is ERC1155, Ownable {
     error TooManyChildTokens(); // A maximum of MAX_CHILDREN child tokens can be minted
     error NoRightsToApproveBid(); // Only the owner of parent token can approve the bid
     error NoRightsToDeleteBid(); // Only the bid creator can delete it
-    error BoundsOutside(); // Token has to be within the bounds of its parent
-    error BoundsOverlap(); // Tokens cannot overlap
+    error FieldOutside(); // Token has to be within the field of its parent
+    error FieldsOverlap(); // Sibling fields cannot overlap
+    error FieldTooLarge(); // Token's field cannot exceed MAXIMUM_FIELD_PORTION % of its parent's
 
     constructor() ERC1155("") {
         _mint(msg.sender, FUEL, TOTAL_SUPPLY, "");
@@ -123,17 +125,20 @@ contract MandelbrotNFT is ERC1155, Ownable {
     function _validateBounds(uint256 parentId, Field memory field) internal view {
         Metadata memory parentMetadata = _metadata[parentId];
         Field memory parentField = parentMetadata.field;
-        if (parentField.left > field.left ||
+        if (field.left < parentField.left ||
             field.right > parentField.right ||
-            parentField.bottom > field.bottom ||
-            field.top > parentField.top) revert BoundsOutside();
+            field.bottom < parentField.bottom ||
+            field.top > parentField.top) revert FieldOutside();
+        if (((field.right - field.left) * (field.top - field.bottom)) /
+            ((parentField.right - parentField.left) * (parentField.top - parentField.bottom)) >
+            MAXIMUM_FIELD_PORTION) revert FieldTooLarge();
         uint256[] memory children = _children[parentId];
         for (uint i = 0; i < children.length; i++) {
             Field memory siblingField = _metadata[children[i]].field;
-            if (field.left <= siblingField.right &&
-                field.right >= siblingField.left &&
-                field.bottom <= siblingField.top &&
-                field.top >= siblingField.bottom) revert BoundsOverlap();
+            if (!(field.left > siblingField.right ||
+                  field.right < siblingField.left ||
+                  field.bottom > siblingField.top ||
+                  field.top < siblingField.bottom)) revert FieldsOverlap();
         }
     }
 
