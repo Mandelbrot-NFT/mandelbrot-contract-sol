@@ -21,10 +21,10 @@ contract MandelbrotNFT is ERC1155, Ownable {
     uint256 public constant UPSTREAM_SHARE = 50;
 
     struct Field {
-        uint256 minX;
-        uint256 minY;
-        uint256 maxX;
-        uint256 maxY;
+        uint256 left;
+        uint256 bottom;
+        uint256 right;
+        uint256 top;
     }
 
     struct Metadata {
@@ -123,17 +123,17 @@ contract MandelbrotNFT is ERC1155, Ownable {
     function _validateBounds(uint256 parentId, Field memory field) internal view {
         Metadata memory parentMetadata = _metadata[parentId];
         Field memory parentField = parentMetadata.field;
-        if (parentField.minX > field.minX ||
-            field.maxX > parentField.maxX ||
-            parentField.minY > field.minY ||
-            field.maxY > parentField.maxY) revert BoundsOutside();
+        if (parentField.left > field.left ||
+            field.right > parentField.right ||
+            parentField.bottom > field.bottom ||
+            field.top > parentField.top) revert BoundsOutside();
         uint256[] memory children = _children[parentId];
         for (uint i = 0; i < children.length; i++) {
             Field memory siblingField = _metadata[children[i]].field;
-            if (field.minX <= siblingField.maxX &&
-                field.maxX >= siblingField.minX &&
-                field.minY <= siblingField.maxY &&
-                field.maxY >= siblingField.minY) revert BoundsOverlap();
+            if (field.left <= siblingField.right &&
+                field.right >= siblingField.left &&
+                field.bottom <= siblingField.top &&
+                field.top >= siblingField.bottom) revert BoundsOverlap();
         }
     }
 
