@@ -13,6 +13,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     uint256 public constant FUEL = 0;
 
+    string public constant BASE_URL = "https://mandelbrot-service.onrender.com/";
     uint256 public constant TOTAL_SUPPLY = 10000 * 10 ** 18;
     uint256 public constant BASE_MINIMUM_BID = 10 * 10 ** 18;
     uint256 public constant MAX_CHILDREN = 5;
@@ -145,6 +146,10 @@ contract MandelbrotNFT is ERC1155, Ownable {
     modifier validBounds(uint256 parentId, Field memory field) {
         _validateBounds(parentId, field);
         _;
+    }
+
+    function uri(uint256 tokenId) public pure override returns (string memory) {
+        return string.concat(BASE_URL, Strings.toString(tokenId));
     }
 
     function _deleteBid(uint256 bidId) internal {
