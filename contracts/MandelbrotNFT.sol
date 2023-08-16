@@ -44,28 +44,9 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 minimumBid;
     }
 
-    struct Bid {
-        uint256 parentId;
-        Field field;
-        address recipient;
-        uint256 amount;
-        uint256 minimumBid;
-    }
-
-    struct BidView {
-        uint256 bidId;
-        uint256 parentId;
-        Field field;
-        address recipient;
-        uint256 amount;
-        uint256 minimumBid;
-    }
-
     Counters.Counter private _tokenIds;
-    Counters.Counter private _bidIdCounter;
     mapping(uint256 => Metadata) private _metadata;
     mapping(uint256 => uint256[]) private _children;
-    mapping(uint256 => Bid) private _bids;
     mapping(uint256 => uint256[]) private _bidIds;
 
     constructor() ERC1155("") {
@@ -118,7 +99,12 @@ contract MandelbrotNFT is ERC1155, Ownable {
     }
 
     modifier tokenExists(uint256 tokenId) {
-        require(_metadata[tokenId].minimumBid > 0, "NFT doesn't exist.");
+        require(_metadata[tokenId].owner != address(0) && balanceOf(_metadata[tokenId].owner, tokenId) == 1, "NFT doesn't exist.");
+        _;
+    }
+
+    modifier bidExists(uint256 bidId) {
+        require(_metadata[bidId].owner != address(0) && balanceOf(_metadata[bidId].owner, bidId) == 0, "Bid doesn't exist.");
         _;
     }
 
@@ -152,8 +138,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return string.concat(BASE_URL, Strings.toString(tokenId));
     }
 
-    function _deleteBid(uint256 bidId) internal {
-        uint256[] storage bidIds = _bidIds[_bids[bidId].parentId];
+    function _deleteBid(uint256 bidId) bidExists(bidId) internal {
+        uint256[] storage bidIds = _bidIds[_metadata[bidId].parentId];
         for (uint256 i; i < bidIds.length; i++) {
             if (bidIds[i] == bidId) {
                 bidIds[i] = bidIds[bidIds.length - 1];
@@ -161,8 +147,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
                 break;
             }
         }
-        _mint(_bids[bidId].recipient, FUEL, _bids[bidId].amount, "");
-        delete _bids[bidId];
+        _mint(_metadata[bidId].owner, FUEL, _metadata[bidId].lockedFuel, "");
+        delete _metadata[bidId];
     }
 
     function bid(
@@ -171,39 +157,39 @@ contract MandelbrotNFT is ERC1155, Ownable {
         Field memory field,
         uint256 amount,
         uint256 minimumBid
-    ) validBounds(parentId, field) public returns (uint256) {
+    ) tokenExists(parentId) validBounds(parentId, field) public returns (uint256) {
         require(amount >= _metadata[parentId].minimumBid, "Bid must exceed or equal minimum bid price.");
         require(minimumBid >= _metadata[parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
 
         _burn(msg.sender, FUEL, amount);
         // _safeTransferFrom(msg.sender, address(this), FUEL, amount, "");
 
-        _bidIdCounter.increment();
-        uint256 newBidId = _bidIdCounter.current();
-        _bids[newBidId] = Bid(parentId, field, recipient, amount, minimumBid);
+        _tokenIds.increment();
+        uint256 newBidId = _tokenIds.current();
+        _metadata[newBidId] = Metadata(recipient, parentId, field, amount, minimumBid);
         _bidIds[parentId].push(newBidId);
         return newBidId;
     }
 
-    function getBids(uint256 parentId) tokenExists(parentId) public view returns (BidView[] memory) {
+    function getBids(uint256 parentId) tokenExists(parentId) public view returns (MetadataView[] memory) {
         uint256[] memory bidIds = _bidIds[parentId];
-        BidView[] memory result = new BidView[](bidIds.length);
+        MetadataView[] memory result = new MetadataView[](bidIds.length);
         for (uint i = 0; i < bidIds.length; i++) {
-            Bid memory bid_ = _bids[bidIds[i]];
-            result[i] = (BidView(bidIds[i], parentId, bid_.field, bid_.recipient, bid_.amount, bid_.minimumBid));
+            Metadata memory bid_ = _metadata[bidIds[i]];
+            result[i] = (MetadataView(bidIds[i], bid_.owner, parentId, bid_.field, bid_.lockedFuel, bid_.minimumBid));
         }
         return result;
     }
 
-    function approve(uint256 bidId) public returns (uint256) {
-        Bid memory bid_ = _bids[bidId];
+    function approve(uint256 bidId) bidExists(bidId) public returns (uint256) {
+        Metadata memory bid_ = _metadata[bidId];
         uint256 parentId = bid_.parentId;
         require(msg.sender == _metadata[parentId].owner, "Only the owner of parent NFT can approve the bid.");
         require(_children[parentId].length < MAX_CHILDREN, string.concat("A maximum of ", Strings.toString(MAX_CHILDREN)," child NFTs can be minted."));
         _validateBounds(parentId, bid_.field);
 
-        uint256 payout = bid_.amount * PARENT_SHARE / 100;
-        uint256 remainder = bid_.amount;
+        uint256 payout = bid_.lockedFuel * PARENT_SHARE / 100;
+        uint256 remainder = bid_.lockedFuel;
         uint256 ancestorId = bid_.parentId;
         do {
             remainder -= payout;
@@ -212,8 +198,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
             payout = payout * UPSTREAM_SHARE / 100;
         } while (ancestorId != 0);
 
-        uint256 newItemId = _mintInternal(parentId, bid_.recipient, bid_.field, remainder, bid_.minimumBid);
-        _children[parentId].push(newItemId);
+        _mint(bid_.owner, bidId, 1, "");
+        _children[parentId].push(bidId);
 
         uint256[] storage bidIds = _bidIds[parentId];
         for (uint256 i; i < bidIds.length; i++) {
@@ -223,9 +209,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
                 break;
             }
         }
-        delete _bids[bidId];
 
-        return newItemId;
+        return bidId;
     }
 
     function batchApprove(uint256[] memory bidIds) public returns (uint256[] memory) {
@@ -236,8 +221,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return tokenIds;
     }
 
-    function deleteBid(uint256 bidId) public {
-        require(msg.sender == _bids[bidId].recipient, "Only the bid creator can delete it.");
+    function deleteBid(uint256 bidId) bidExists(bidId) public {
+        require(msg.sender == _metadata[bidId].owner, "Only the bid creator can delete it.");
         _deleteBid(bidId);
     }
 
@@ -250,7 +235,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
     //     return newItemId;
     // }
 
-    function burn(uint256 tokenId) public {
+    function burn(uint256 tokenId) tokenExists(tokenId) public {
         require(msg.sender == _metadata[tokenId].owner, "Only the NFT owner can burn it.");
         require(_children[tokenId].length == 0, "Cannot burn NFT if it has children.");
 
@@ -306,7 +291,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return result;
     }
 
-    function setminimumBid(uint256 tokenId, uint256 minimumBid) public {
+    function setminimumBid(uint256 tokenId, uint256 minimumBid) tokenExists(tokenId) public {
         require(minimumBid >= _metadata[_metadata[tokenId].parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
         _metadata[tokenId].minimumBid = minimumBid;
     }
