@@ -21,13 +21,13 @@ contract MandelbrotNFT is ERC1155, Ownable {
     uint256 public constant UPSTREAM_SHARE = 50;
 
     struct Field {
-        uint256 min_x;
-        uint256 min_y;
-        uint256 max_x;
-        uint256 max_y;
+        uint256 minX;
+        uint256 minY;
+        uint256 maxX;
+        uint256 maxY;
     }
 
-    struct Node {
+    struct Metadata {
         address owner;
         uint256 parentId;
         Field field;
@@ -35,7 +35,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 minimumBid;
     }
 
-    struct Metadata {
+    struct MetadataView {
         uint256 tokenId;
         address owner;
         uint256 parentId;
@@ -63,7 +63,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     Counters.Counter private _tokenIds;
     Counters.Counter private _bidIdCounter;
-    mapping(uint256 => Node) private _nodes;
+    mapping(uint256 => Metadata) private _metadata;
     mapping(uint256 => uint256[]) private _children;
     mapping(uint256 => Bid) private _bids;
     mapping(uint256 => uint256[]) private _bidIds;
@@ -86,12 +86,12 @@ contract MandelbrotNFT is ERC1155, Ownable {
         for (uint i = 0; i < ids.length; i++) {
             uint256 tokenId = ids[i];
             if (tokenId > 0) {
-                _nodes[tokenId].owner = to;
+                _metadata[tokenId].owner = to;
             }
         }
     }
 
-    function _setNode(
+    function _setMetadata(
         uint256 tokenId,
         address recipient,
         uint256 parentId,
@@ -99,7 +99,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 lockedFuel,
         uint256 minimumBid
     ) internal {
-        _nodes[tokenId] = Node(recipient, parentId, field, lockedFuel, minimumBid);
+        _metadata[tokenId] = Metadata(recipient, parentId, field, lockedFuel, minimumBid);
     }
 
     function _mintInternal(
@@ -109,35 +109,35 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 lockedFuel,
         uint256 minimumBid
     ) internal returns (uint256) {
-        require(minimumBid >= _nodes[parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
+        require(minimumBid >= _metadata[parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
         _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
         _mint(recipient, newItemId, 1, "");
-        _setNode(newItemId, recipient, parentId, field, lockedFuel, minimumBid);
+        _setMetadata(newItemId, recipient, parentId, field, lockedFuel, minimumBid);
         return newItemId;
     }
 
     modifier tokenExists(uint256 tokenId) {
-        require(_nodes[tokenId].minimumBid > 0, "NFT doesn't exist.");
+        require(_metadata[tokenId].minimumBid > 0, "NFT doesn't exist.");
         _;
     }
 
     function _validateBounds(uint256 parentId, Field memory field) internal view {
-        Node memory parentNode = _nodes[parentId];
-        Field memory parentField = parentNode.field;
+        Metadata memory parentMetadata = _metadata[parentId];
+        Field memory parentField = parentMetadata.field;
         require(
-            parentField.min_x <= field.min_x && field.max_x <= parentField.max_x &&
-            parentField.min_y <= field.min_y && field.max_y <= parentField.max_y,
+            parentField.minX <= field.minX && field.maxX <= parentField.maxX &&
+            parentField.minY <= field.minY && field.maxY <= parentField.maxY,
             "NFT has to be within the bounds of its parent."
         );
         uint256[] memory children = _children[parentId];
         for (uint i = 0; i < children.length; i++) {
-            Field memory siblingField = _nodes[children[i]].field;
+            Field memory siblingField = _metadata[children[i]].field;
             require(
-                field.min_x > siblingField.max_x ||
-                field.max_x < siblingField.min_x ||
-                field.min_y > siblingField.max_y ||
-                field.max_y < siblingField.min_y,
+                field.minX > siblingField.maxX ||
+                field.maxX < siblingField.minX ||
+                field.minY > siblingField.maxY ||
+                field.maxY < siblingField.minY,
                 "NFTs cannot overlap."
             );
         }
@@ -172,8 +172,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 amount,
         uint256 minimumBid
     ) validBounds(parentId, field) public returns (uint256) {
-        require(amount >= _nodes[parentId].minimumBid, "Bid must exceed or equal minimum bid price.");
-        require(minimumBid >= _nodes[parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
+        require(amount >= _metadata[parentId].minimumBid, "Bid must exceed or equal minimum bid price.");
+        require(minimumBid >= _metadata[parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
 
         _burn(msg.sender, FUEL, amount);
         // _safeTransferFrom(msg.sender, address(this), FUEL, amount, "");
@@ -198,7 +198,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
     function approve(uint256 bidId) public returns (uint256) {
         Bid memory bid_ = _bids[bidId];
         uint256 parentId = bid_.parentId;
-        require(msg.sender == _nodes[parentId].owner, "Only the owner of parent NFT can approve the bid.");
+        require(msg.sender == _metadata[parentId].owner, "Only the owner of parent NFT can approve the bid.");
         require(_children[parentId].length < MAX_CHILDREN, string.concat("A maximum of ", Strings.toString(MAX_CHILDREN)," child NFTs can be minted."));
         _validateBounds(parentId, bid_.field);
 
@@ -207,8 +207,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 ancestorId = bid_.parentId;
         do {
             remainder -= payout;
-            _mint(_nodes[ancestorId].owner, FUEL, payout, "");
-            ancestorId = _nodes[ancestorId].parentId;
+            _mint(_metadata[ancestorId].owner, FUEL, payout, "");
+            ancestorId = _metadata[ancestorId].parentId;
             payout = payout * UPSTREAM_SHARE / 100;
         } while (ancestorId != 0);
 
@@ -245,13 +245,13 @@ contract MandelbrotNFT is ERC1155, Ownable {
     // function mintNFT(uint256 parentId, address recipient, Field memory field) validBounds(parentId, field) public returns (uint256) {
     //     require(_children[parentId].length < MAX_CHILDREN, string.concat("A maximum of ", Strings.toString(MAX_CHILDREN)," child NFTs can be minted."));
 
-    //     uint256 newItemId = _mintInternal(parentId, recipient, field, _nodes[parentId].minimumBid);
+    //     uint256 newItemId = _mintInternal(parentId, recipient, field, _metadata[parentId].minimumBid);
     //     _children[parentId].push(newItemId);
     //     return newItemId;
     // }
 
     function burn(uint256 tokenId) public {
-        require(msg.sender == _nodes[tokenId].owner, "Only the NFT owner can burn it.");
+        require(msg.sender == _metadata[tokenId].owner, "Only the NFT owner can burn it.");
         require(_children[tokenId].length == 0, "Cannot burn NFT if it has children.");
 
         uint256[] memory bids = _bidIds[tokenId];
@@ -259,7 +259,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
             _deleteBid(bids[i]);
         }
 
-        uint256[] storage children = _children[_nodes[tokenId].parentId];
+        uint256[] storage children = _children[_metadata[tokenId].parentId];
         for (uint256 i; i < children.length; i++) {
             if (children[i] == tokenId) {
                 children[i] = children[children.length - 1];
@@ -267,47 +267,47 @@ contract MandelbrotNFT is ERC1155, Ownable {
                 break;
             }
         }
-        _mint(msg.sender, FUEL, _nodes[tokenId].lockedFuel, "");
-        delete _nodes[tokenId];
+        _mint(msg.sender, FUEL, _metadata[tokenId].lockedFuel, "");
+        delete _metadata[tokenId];
 
         _burn(msg.sender, tokenId, 1);
     }
 
-    function getMetadata(uint256 tokenId) tokenExists(tokenId) public view returns (Metadata memory) {
-        Node memory node = _nodes[tokenId];
-        return Metadata(tokenId, node.owner, node.parentId, node.field, node.lockedFuel, node.minimumBid);
+    function getMetadata(uint256 tokenId) tokenExists(tokenId) public view returns (MetadataView memory) {
+        Metadata memory metadata = _metadata[tokenId];
+        return MetadataView(tokenId, metadata.owner, metadata.parentId, metadata.field, metadata.lockedFuel, metadata.minimumBid);
     }
 
-    function getChildrenMetadata(uint256 parentId) tokenExists(parentId) public view returns (Metadata[] memory) {
+    function getChildrenMetadata(uint256 parentId) tokenExists(parentId) public view returns (MetadataView[] memory) {
         uint256[] memory children = _children[parentId];
-        Metadata[] memory result = new Metadata[](children.length);
+        MetadataView[] memory result = new MetadataView[](children.length);
         for (uint i = 0; i < children.length; i++) {
-            Node memory node = _nodes[children[i]];
-            result[i] = (Metadata(children[i], node.owner, parentId, node.field, node.lockedFuel, node.minimumBid));
+            Metadata memory metadata = _metadata[children[i]];
+            result[i] = (MetadataView(children[i], metadata.owner, parentId, metadata.field, metadata.lockedFuel, metadata.minimumBid));
         }
         return result;
     }
 
-    function getAncestryMetadata(uint256 tokenId) tokenExists(tokenId) public view returns (Metadata[] memory) {
+    function getAncestryMetadata(uint256 tokenId) tokenExists(tokenId) public view returns (MetadataView[] memory) {
         uint depth = 0;
         uint256 ancestorId = tokenId;
         do {
             depth += 1;
-            ancestorId = _nodes[ancestorId].parentId;
+            ancestorId = _metadata[ancestorId].parentId;
         } while (ancestorId != 0);
 
-        Metadata[] memory result = new Metadata[](depth);
+        MetadataView[] memory result = new MetadataView[](depth);
         ancestorId = tokenId;
         for (uint i = 0; i < depth; i++) {
-            Node memory node = _nodes[ancestorId];
-            result[i] = (Metadata(ancestorId, node.owner, node.parentId, node.field, node.lockedFuel, node.minimumBid));
-            ancestorId = node.parentId;
+            Metadata memory metadata = _metadata[ancestorId];
+            result[i] = (MetadataView(ancestorId, metadata.owner, metadata.parentId, metadata.field, metadata.lockedFuel, metadata.minimumBid));
+            ancestorId = metadata.parentId;
         }
         return result;
     }
 
     function setminimumBid(uint256 tokenId, uint256 minimumBid) public {
-        require(minimumBid >= _nodes[_nodes[tokenId].parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
-        _nodes[tokenId].minimumBid = minimumBid;
+        require(minimumBid >= _metadata[_metadata[tokenId].parentId].minimumBid, "Child's minimum bid has to be at least as much as parent's.");
+        _metadata[tokenId].minimumBid = minimumBid;
     }
 }
