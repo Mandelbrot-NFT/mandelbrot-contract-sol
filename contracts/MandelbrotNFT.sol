@@ -18,8 +18,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
     uint256 public constant BASE_MINIMUM_BID = 10 * 10 ** 18;
     uint256 public constant MAX_CHILDREN = 5;
     uint256 public constant MAXIMUM_FIELD_PORTION = 10; // 10%
-    uint256 public constant PARENT_SHARE = 10; // 10%
-    uint256 public constant UPSTREAM_SHARE = 50; // 50%
+    uint256 public constant MINT_FEE = 40;
+    uint256 public constant UPSTREAM_SHARE = 20;
 
     struct Field {
         uint256 left;
@@ -176,17 +176,23 @@ contract MandelbrotNFT is ERC1155, Ownable {
         if (children.length == MAX_CHILDREN) revert TooManyChildTokens();
         _validateTokenField(parentId, bid_.field);
 
-        uint256 payout = bid_.lockedFuel * PARENT_SHARE / 100;
-        uint256 remainder = bid_.lockedFuel;
+        uint256 remaining_payout = bid_.lockedFuel * MINT_FEE / 100;
+        bid_.lockedFuel -= remaining_payout;
+
         uint256 ancestorId = bid_.parentId;
-        do {
-            remainder -= payout;
+        uint256 upstream_share = UPSTREAM_SHARE;
+        while (true) {
             Metadata storage ancestor = _metadata[ancestorId];
-            _mint(ancestor.owner, FUEL, payout, "");
-            ancestorId = ancestor.parentId;
-            payout = payout * UPSTREAM_SHARE / 100;
-        } while (ancestorId != 0);
-        bid_.lockedFuel = remainder;
+            if (ancestor.parentId == 0) {
+                _mint(ancestor.owner, FUEL, remaining_payout, "");
+                break;
+            } else {
+                _mint(ancestor.owner, FUEL, remaining_payout * (100 - upstream_share) / 100, "");
+                remaining_payout = remaining_payout * upstream_share / 100;
+                ancestorId = ancestor.parentId;
+                upstream_share = UPSTREAM_SHARE + (100 - UPSTREAM_SHARE) * (100 - 100 * _children[ancestorId].length / MAX_CHILDREN) / 100;
+            }
+        }
 
         _mint(bid_.owner, bidId, 1, "");
         children.push(bidId);
