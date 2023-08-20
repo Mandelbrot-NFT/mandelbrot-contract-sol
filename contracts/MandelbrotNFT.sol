@@ -62,6 +62,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
     error FieldOutside(); // Token has to be within the field of its parent
     error FieldsOverlap(); // Sibling fields cannot overlap
     error FieldTooLarge(); // Token's field cannot exceed MAXIMUM_FIELD_PORTION % of its parent's
+    error NoCommonParent(); // Bids being approved are inside of different tokens
 
     constructor() ERC1155("") {
         _mint(msg.sender, FUEL, TOTAL_SUPPLY, "");
@@ -168,7 +169,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return newBidId;
     }
 
-    function approve(uint256 bidId) bidExists(bidId) public {
+    function _approve(uint256 bidId) bidExists(bidId) internal returns (uint256) {
         Metadata storage bid_ = _metadata[bidId];
         uint256 parentId = bid_.parentId;
         if (msg.sender != _metadata[parentId].owner) revert NoRightsToApproveBid();
@@ -176,23 +177,8 @@ contract MandelbrotNFT is ERC1155, Ownable {
         if (children.length == MAX_CHILDREN) revert TooManyChildTokens();
         _validateTokenField(parentId, bid_.field);
 
-        uint256 remaining_payout = bid_.lockedFuel * MINT_FEE / 100;
-        bid_.lockedFuel -= remaining_payout;
-
-        uint256 ancestorId = bid_.parentId;
-        uint256 upstream_share = UPSTREAM_SHARE;
-        while (true) {
-            Metadata storage ancestor = _metadata[ancestorId];
-            if (ancestor.parentId == 0) {
-                _mint(ancestor.owner, FUEL, remaining_payout, "");
-                break;
-            } else {
-                _mint(ancestor.owner, FUEL, remaining_payout * (100 - upstream_share) / 100, "");
-                remaining_payout = remaining_payout * upstream_share / 100;
-                ancestorId = ancestor.parentId;
-                upstream_share = UPSTREAM_SHARE + (100 - UPSTREAM_SHARE) * (100 - 100 * _children[ancestorId].length / MAX_CHILDREN) / 100;
-            }
-        }
+        uint256 fee = bid_.lockedFuel * MINT_FEE / 100;
+        bid_.lockedFuel -= fee;
 
         _mint(bid_.owner, bidId, 1, "");
         children.push(bidId);
@@ -205,12 +191,42 @@ contract MandelbrotNFT is ERC1155, Ownable {
                 break;
             }
         }
+
+        return fee;
+    }
+
+    function _distribute(uint256 ancestorId, uint256 amount) internal {
+        uint256 upstream_share = UPSTREAM_SHARE;
+        while (true) {
+            Metadata storage ancestor = _metadata[ancestorId];
+            if (ancestor.parentId == 0) {
+                _mint(ancestor.owner, FUEL, amount, "");
+                break;
+            } else {
+                _mint(ancestor.owner, FUEL, amount * (100 - upstream_share) / 100, "");
+                amount = amount * upstream_share / 100;
+                ancestorId = ancestor.parentId;
+                upstream_share = UPSTREAM_SHARE + (100 - UPSTREAM_SHARE) * (100 - 100 * _children[ancestorId].length / MAX_CHILDREN) / 100;
+            }
+        }
+    }
+
+    function approve(uint256 bidId) public {
+        uint256 fee = _approve(bidId);
+        _distribute(_metadata[bidId].parentId, fee);
     }
 
     function batchApprove(uint256[] calldata bidIds) external {
+        uint256 fees = 0;
+        uint256 parentId = 0;
         for (uint256 i; i < bidIds.length; i++) {
-            approve(bidIds[i]);
+            uint256 bidId = bidIds[i];
+            fees += _approve(bidId);
+            uint256 otherParentId = _metadata[bidId].parentId;
+            if (parentId != 0 && parentId != otherParentId) revert NoCommonParent();
+            parentId = otherParentId;
         }
+        _distribute(parentId, fees);
     }
 
     function deleteBid(uint256 bidId) bidExists(bidId) external {
