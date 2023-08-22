@@ -43,6 +43,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         Field field;
         uint256 lockedFuel;
         uint256 minimumBid;
+        uint256 layer;
     }
 
     Counters.Counter private _tokenIds;
@@ -277,44 +278,51 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return string.concat(BASE_URL, Strings.toString(tokenId));
     }
 
+    function _getLayer(uint256 tokenId) internal view returns (uint256) {
+        uint256 result = 0;
+        uint256 ancestorId = tokenId;
+        do {
+            result += 1;
+            ancestorId = _metadata[ancestorId].parentId;
+        } while (ancestorId != 0);
+        return result - 1;
+    }
+
     function getBids(uint256 parentId) tokenExists(parentId) external view returns (MetadataView[] memory) {
+        uint256 layer = _getLayer(parentId) + 1;
         uint256[] storage bidIds = _bidIds[parentId];
         MetadataView[] memory result = new MetadataView[](bidIds.length);
         for (uint i = 0; i < bidIds.length; i++) {
             Metadata storage bid_ = _metadata[bidIds[i]];
-            result[i] = (MetadataView(bidIds[i], bid_.owner, parentId, bid_.field, bid_.lockedFuel, bid_.minimumBid));
+            result[i] = (MetadataView(bidIds[i], bid_.owner, parentId, bid_.field, bid_.lockedFuel, bid_.minimumBid, layer));
         }
         return result;
     }
 
     function getMetadata(uint256 tokenId) tokenExists(tokenId) external view returns (MetadataView memory) {
+        uint256 layer = _getLayer(tokenId);
         Metadata storage metadata = _metadata[tokenId];
-        return MetadataView(tokenId, metadata.owner, metadata.parentId, metadata.field, metadata.lockedFuel, metadata.minimumBid);
+        return MetadataView(tokenId, metadata.owner, metadata.parentId, metadata.field, metadata.lockedFuel, metadata.minimumBid, layer);
     }
 
     function getChildrenMetadata(uint256 parentId) tokenExists(parentId) external view returns (MetadataView[] memory) {
+        uint256 layer = _getLayer(parentId) + 1;
         uint256[] storage children = _children[parentId];
         MetadataView[] memory result = new MetadataView[](children.length);
         for (uint i = 0; i < children.length; i++) {
             Metadata storage metadata = _metadata[children[i]];
-            result[i] = (MetadataView(children[i], metadata.owner, parentId, metadata.field, metadata.lockedFuel, metadata.minimumBid));
+            result[i] = MetadataView(children[i], metadata.owner, parentId, metadata.field, metadata.lockedFuel, metadata.minimumBid, layer);
         }
         return result;
     }
 
     function getAncestryMetadata(uint256 tokenId) tokenExists(tokenId) external view returns (MetadataView[] memory) {
-        uint depth = 0;
+        uint256 layer = _getLayer(tokenId);
+        MetadataView[] memory result = new MetadataView[](layer + 1);
         uint256 ancestorId = tokenId;
-        do {
-            depth += 1;
-            ancestorId = _metadata[ancestorId].parentId;
-        } while (ancestorId != 0);
-
-        MetadataView[] memory result = new MetadataView[](depth);
-        ancestorId = tokenId;
-        for (uint i = 0; i < depth; i++) {
+        for (uint i = 0; i < layer + 1; i++) {
             Metadata storage metadata = _metadata[ancestorId];
-            result[i] = (MetadataView(ancestorId, metadata.owner, metadata.parentId, metadata.field, metadata.lockedFuel, metadata.minimumBid));
+            result[i] = MetadataView(ancestorId, metadata.owner, metadata.parentId, metadata.field, metadata.lockedFuel, metadata.minimumBid, layer - i);
             ancestorId = metadata.parentId;
         }
         return result;

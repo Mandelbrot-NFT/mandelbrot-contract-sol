@@ -435,4 +435,46 @@ describe("MandelbrotNFT contract", function () {
       await expect(mandelbrotNFT.batchApprove([2, 3])).to.be.revertedWithCustomError(mandelbrotNFT, "FieldsOverlap");
     });
   });
+
+  describe("Metadata", function () {
+    it("Should return ancestry metadata", async function () {
+      const { mandelbrotNFT, owner, addr1, addr2, addr3 } = await loadFixture(deployTokenFixture);
+      await loadFixture(fundAccounts);
+      const originTokenId = 1;
+
+      const usedFUEL = 10n * 10n ** 18n;
+      const minimumBid = 10n * 10n ** 18n;
+      let args = [
+        originTokenId,
+        addr1.address,
+        {"left": 0n, "right": 2n * 10n ** 17n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+        usedFUEL,
+        minimumBid
+      ];
+      await mandelbrotNFT.connect(addr1).bid(...args);
+      await mandelbrotNFT.batchApprove([2]);
+
+      args = [
+        2,
+        addr2.address,
+        {"left": 0n, "right": 2n * 10n ** 16n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+        usedFUEL,
+        minimumBid
+      ];
+      await mandelbrotNFT.connect(addr2).bid(...args);
+      await mandelbrotNFT.connect(addr1).batchApprove([3]);
+
+      args = [
+        3,
+        addr2.address,
+        {"left": 0n, "right": 2n * 10n ** 15n, "bottom": 15n * 10n ** 17n, "top": 16n * 10n ** 17n},
+        usedFUEL,
+        minimumBid
+      ];
+      await mandelbrotNFT.connect(addr3).bid(...args);
+      await mandelbrotNFT.connect(addr2).batchApprove([4]);
+
+      let metadata = await mandelbrotNFT.getAncestryMetadata(4);
+    });
+  });
 });
