@@ -30,7 +30,7 @@ describe("MandelbrotNFT contract", function () {
     const args = [
       originTokenId,
       addr1.address,
-      {"left": 15n * 10n ** 17n, "right": 2n * 10n ** 18n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+      {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
       usedFUEL,
       minimumBid
     ];
@@ -68,9 +68,9 @@ describe("MandelbrotNFT contract", function () {
       expect(originTokenMetadata.owner).to.equal(owner.address);
       expect(originTokenMetadata.parentId).to.equal(0);
       expect(originTokenMetadata.field.left).to.equal(0);
-      expect(originTokenMetadata.field.right).to.equal(3n * 10n ** 18n);
+      expect(originTokenMetadata.field.right).to.equal(3n * 16n ** 63n);
       expect(originTokenMetadata.field.bottom).to.equal(0);
-      expect(originTokenMetadata.field.top).to.equal(3n * 10n ** 18n);
+      expect(originTokenMetadata.field.top).to.equal(3n * 16n ** 63n);
       expect(originTokenMetadata.lockedFuel).to.equal(0);
       expect(originTokenMetadata.minimumBid).to.equal(await mandelbrotNFT.BASE_MINIMUM_BID());
     });
@@ -94,10 +94,10 @@ describe("MandelbrotNFT contract", function () {
       expect(bidMetadata.tokenId).to.equal(bidId);
       expect(bidMetadata.owner).to.equal(addr1.address);
       expect(bidMetadata.parentId).to.equal(originTokenId);
-      expect(bidMetadata.field.left).to.equal(15n * 10n ** 17n);
-      expect(bidMetadata.field.right).to.equal(2n * 10n ** 18n);
-      expect(bidMetadata.field.bottom).to.equal(15n * 10n ** 17n);
-      expect(bidMetadata.field.top).to.equal(2n * 10n ** 18n);
+      expect(bidMetadata.field.left).to.equal(24n * 16n ** 62n);
+      expect(bidMetadata.field.right).to.equal(2n * 16n ** 63n);
+      expect(bidMetadata.field.bottom).to.equal(24n * 16n ** 62n);
+      expect(bidMetadata.field.top).to.equal(2n * 16n ** 63n);
       expect(bidMetadata.lockedFuel).to.equal(usedFUEL);
       expect(bidMetadata.minimumBid).to.equal(minimumBid);
     });
@@ -112,7 +112,7 @@ describe("MandelbrotNFT contract", function () {
       const args = [
         invalidTokenId,
         addr1.address,
-        {"left": 15n * 10n ** 17n, "right": 2n * 10n ** 18n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+        {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
         minimumBid
       ];
@@ -129,7 +129,7 @@ describe("MandelbrotNFT contract", function () {
       const args = [
         originTokenId,
         addr1.address,
-        {"left": 15n * 10n ** 17n, "right": 2n * 10n ** 18n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+        {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
         minimumBid
       ];
@@ -146,7 +146,7 @@ describe("MandelbrotNFT contract", function () {
       const args = [
         originTokenId,
         addr1.address,
-        {"left": 15n * 10n ** 17n, "right": 2n * 10n ** 18n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+        {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
         minimumBid
       ];
@@ -163,7 +163,7 @@ describe("MandelbrotNFT contract", function () {
       const args = [
         originTokenId,
         addr1.address,
-        {"left": 35n * 10n ** 17n, "right": 4n * 10n ** 18n, "bottom": 35n * 10n ** 17n, "top": 4n * 10n ** 18n},
+        {"left": 35n * 16n ** 62n, "right": 4n * 16n ** 63n, "bottom": 35n * 16n ** 62n, "top": 4n * 16n ** 63n},
         usedFUEL,
         minimumBid
       ];
@@ -180,7 +180,7 @@ describe("MandelbrotNFT contract", function () {
       const args = [
         originTokenId,
         addr1.address,
-        {"left": 15n * 10n ** 17n, "right": 3n * 10n ** 18n, "bottom": 15n * 10n ** 17n, "top": 3n * 10n ** 18n},
+        {"left": 24n * 16n ** 62n, "right": 3n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 3n * 16n ** 63n},
         usedFUEL,
         minimumBid
       ];
@@ -196,7 +196,7 @@ describe("MandelbrotNFT contract", function () {
       const args = [
         originTokenId,
         addr1.address,
-        {"left": 15n * 10n ** 17n, "right": 2n * 10n ** 18n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+        {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
         minimumBid
       ];
@@ -230,10 +230,10 @@ describe("MandelbrotNFT contract", function () {
       expect(tokenMetadata.tokenId).to.equal(bidId);
       expect(tokenMetadata.owner).to.equal(addr1.address);
       expect(tokenMetadata.parentId).to.equal(originTokenId);
-      expect(tokenMetadata.field.left).to.equal(15n * 10n ** 17n);
-      expect(tokenMetadata.field.right).to.equal(2n * 10n ** 18n);
-      expect(tokenMetadata.field.bottom).to.equal(15n * 10n ** 17n);
-      expect(tokenMetadata.field.top).to.equal(2n * 10n ** 18n);
+      expect(tokenMetadata.field.left).to.equal(24n * 16n ** 62n);
+      expect(tokenMetadata.field.right).to.equal(2n * 16n ** 63n);
+      expect(tokenMetadata.field.bottom).to.equal(24n * 16n ** 62n);
+      expect(tokenMetadata.field.top).to.equal(2n * 16n ** 63n);
       expect(tokenMetadata.lockedFuel).to.equal(usedFUEL * (100n - BigInt(await mandelbrotNFT.MINT_FEE())) / 100n);
       expect(tokenMetadata.minimumBid).to.equal(minimumBid);
 
@@ -255,7 +255,7 @@ describe("MandelbrotNFT contract", function () {
         const args = [
           originTokenId,
           addr1.address,
-          {"left": BigInt(i * 3) * 10n ** 17n, "right": BigInt(i * 3 + 2) * 10n ** 17n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+          {"left": BigInt(i * 3) * 16n ** 62n, "right": BigInt(i * 3 + 2) * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
           usedFUEL,
           minimumBid
         ];
@@ -273,7 +273,7 @@ describe("MandelbrotNFT contract", function () {
       const args = [
         2,
         addr2.address,
-        {"left": 1n * 10n ** 17n, "right": 2n * 10n ** 17n, "bottom": 15n * 10n ** 17n, "top": 16n * 10n ** 17n},
+        {"left": 1n * 16n ** 62n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
         usedFUEL,
         minimumBid
       ];
@@ -314,7 +314,7 @@ describe("MandelbrotNFT contract", function () {
       let args = [
         originTokenId,
         addr1.address,
-        {"left": 0n, "right": 2n * 10n ** 17n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+        {"left": 0n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
         minimumBid
       ];
@@ -333,7 +333,7 @@ describe("MandelbrotNFT contract", function () {
         args = [
           2,
           addr2.address,
-          {"left": BigInt(i * 3) * 10n ** 16n, "right": BigInt(i * 3 + 2) * 10n ** 16n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+          {"left": BigInt(i * 3) * 16n ** 61n, "right": BigInt(i * 3 + 2) * 16n ** 61n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
           usedFUEL,
           minimumBid
         ];
@@ -356,7 +356,7 @@ describe("MandelbrotNFT contract", function () {
       args = [
         3,
         addr2.address,
-        {"left": 0n, "right": 2n * 10n ** 15n, "bottom": 15n * 10n ** 17n, "top": 16n * 10n ** 17n},
+        {"left": 0n, "right": 2n * 10n ** 15n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
         usedFUEL,
         minimumBid
       ];
@@ -404,7 +404,7 @@ describe("MandelbrotNFT contract", function () {
         const args = [
           originTokenId,
           addr1.address,
-          {"left": BigInt(i * 3) * 10n ** 17n, "right": BigInt(i * 3 + 2) * 10n ** 17n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+          {"left": BigInt(i * 3) * 16n ** 62n, "right": BigInt(i * 3 + 2) * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
           usedFUEL,
           minimumBid
         ];
@@ -425,7 +425,7 @@ describe("MandelbrotNFT contract", function () {
         const args = [
           originTokenId,
           addr1.address,
-          {"left": BigInt(i * 3) * 10n ** 17n, "right": BigInt(i * 3 + 5) * 10n ** 17n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+          {"left": BigInt(i * 3) * 16n ** 62n, "right": BigInt(i * 3 + 5) * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
           usedFUEL,
           minimumBid
         ];
@@ -447,7 +447,7 @@ describe("MandelbrotNFT contract", function () {
       let args = [
         originTokenId,
         addr1.address,
-        {"left": 0n, "right": 2n * 10n ** 17n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+        {"left": 0n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
         minimumBid
       ];
@@ -457,7 +457,7 @@ describe("MandelbrotNFT contract", function () {
       args = [
         2,
         addr2.address,
-        {"left": 0n, "right": 2n * 10n ** 16n, "bottom": 15n * 10n ** 17n, "top": 2n * 10n ** 18n},
+        {"left": 0n, "right": 2n * 16n ** 61n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
         minimumBid
       ];
@@ -467,7 +467,7 @@ describe("MandelbrotNFT contract", function () {
       args = [
         3,
         addr2.address,
-        {"left": 0n, "right": 2n * 10n ** 15n, "bottom": 15n * 10n ** 17n, "top": 16n * 10n ** 17n},
+        {"left": 0n, "right": 2n * 16n ** 60n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
         usedFUEL,
         minimumBid
       ];
