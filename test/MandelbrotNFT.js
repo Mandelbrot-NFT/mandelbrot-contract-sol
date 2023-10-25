@@ -476,5 +476,46 @@ describe("MandelbrotNFT contract", function () {
 
       let metadata = await mandelbrotNFT.getAncestryMetadata(4);
     });
+
+    it("Should return owned items", async function () {
+      const { mandelbrotNFT, owner, addr1 } = await loadFixture(deployTokenFixture);
+      await loadFixture(fundAccounts);
+      const originTokenId = 1;
+
+      const usedFUEL = 10n * 10n ** 18n;
+      const minimumBid = 10n * 10n ** 18n;
+      let args = [
+        originTokenId,
+        addr1.address,
+        {"left": 0n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
+        usedFUEL,
+        minimumBid
+      ];
+      await mandelbrotNFT.connect(addr1).bid(...args);
+      await mandelbrotNFT.batchApprove([2]);
+
+      args = [
+        2,
+        addr1.address,
+        {"left": 0n, "right": 2n * 16n ** 61n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
+        usedFUEL,
+        minimumBid
+      ];
+      await mandelbrotNFT.connect(addr1).bid(...args);
+      await mandelbrotNFT.connect(addr1).batchApprove([3]);
+
+      args = [
+        3,
+        addr1.address,
+        {"left": 0n, "right": 2n * 16n ** 60n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
+        usedFUEL,
+        minimumBid
+      ];
+      await mandelbrotNFT.connect(addr1).bid(...args);
+
+      let { tokens, bids } = await mandelbrotNFT.getOwnedItems(addr1.address);
+      expect(tokens.length).to.equal(2);
+      expect(bids.length).to.equal(1);
+    });
   });
 });

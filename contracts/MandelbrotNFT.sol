@@ -329,6 +329,39 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return result;
     }
 
+    function getOwnedItems(address owner) external view returns (MetadataView[] memory tokens, MetadataView[] memory bids) {
+        uint tokenCounter = 0;
+        uint bidCounter = 0;
+        for (uint i = 1; i <= _tokenIds.current(); i++) {
+            Metadata storage metadata = _metadata[i];
+            if (metadata.owner == owner) {
+                if (balanceOf(owner, i) == 1) {
+                    tokenCounter++;
+                } else if (balanceOf(owner, i) == 0) {
+                    bidCounter++;
+                }
+            }
+        }
+
+        tokens = new MetadataView[](tokenCounter);
+        bids = new MetadataView[](bidCounter);
+        tokenCounter = 0;
+        bidCounter = 0;
+        for (uint i = 1; i <= _tokenIds.current(); i++) {
+            Metadata storage metadata = _metadata[i];
+            if (metadata.owner == owner) {
+                MetadataView memory view_ = MetadataView(i, metadata.owner, metadata.parentId, metadata.field, metadata.lockedFuel, metadata.minimumBid, 0);
+                if (balanceOf(owner, i) == 1) {
+                    tokens[tokenCounter] = view_;
+                    tokenCounter++;
+                } else if (balanceOf(owner, i) == 0) {
+                    bids[bidCounter] = view_;
+                    bidCounter++;
+                }
+            }
+        }
+    }
+
     function setminimumBid(uint256 tokenId, uint256 minimumBid) tokenExists(tokenId) external {
         if (minimumBid < _metadata[_metadata[tokenId].parentId].minimumBid) revert MinimumBidTooLow();
         _metadata[tokenId].minimumBid = minimumBid;

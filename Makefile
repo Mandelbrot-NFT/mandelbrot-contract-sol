@@ -1,7 +1,7 @@
 deploy:
 	npx hardhat run scripts/deploy.js --network sepolia
 
-test:
+tests:
 	npx hardhat test
 
 console:
