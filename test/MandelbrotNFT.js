@@ -12,32 +12,32 @@ describe("MandelbrotNFT contract", function () {
 
   async function fundAccounts() {
     const { mandelbrotNFT, owner, addr1, addr2, addr3 } = await loadFixture(deployTokenFixture);
-    const addr1FUELBalance = 200n * 10n ** 18n;
-    const addr2FUELBalance = 200n * 10n ** 18n;
-    const addr3FUELBalance = 200n * 10n ** 18n;
-    await mandelbrotNFT.safeTransferFrom(owner.address, addr1.address, await mandelbrotNFT.FUEL(), addr1FUELBalance, 0x0);
-    await mandelbrotNFT.safeTransferFrom(owner.address, addr2.address, await mandelbrotNFT.FUEL(), addr2FUELBalance, 0x0);
-    await mandelbrotNFT.safeTransferFrom(owner.address, addr3.address, await mandelbrotNFT.FUEL(), addr2FUELBalance, 0x0);
-    return { addr1FUELBalance, addr2FUELBalance, addr3FUELBalance };
+    const addr1OMBalance = 200n * 10n ** 18n;
+    const addr2OMBalance = 200n * 10n ** 18n;
+    const addr3OMBalance = 200n * 10n ** 18n;
+    await mandelbrotNFT.safeTransferFrom(owner.address, addr1.address, await mandelbrotNFT.OM(), addr1OMBalance, 0x0);
+    await mandelbrotNFT.safeTransferFrom(owner.address, addr2.address, await mandelbrotNFT.OM(), addr2OMBalance, 0x0);
+    await mandelbrotNFT.safeTransferFrom(owner.address, addr3.address, await mandelbrotNFT.OM(), addr2OMBalance, 0x0);
+    return { addr1OMBalance, addr2OMBalance, addr3OMBalance };
   }
 
   async function mint() {
     const { mandelbrotNFT, owner, addr1, addr2 } = await loadFixture(deployTokenFixture);
     await loadFixture(fundAccounts);
     const originTokenId = 1;
-    const usedFUEL = 15n * 10n ** 18n;
+    const usedOM = 15n * 10n ** 18n;
     const minimumBid = 20n * 10n ** 18n;
     const args = [
       originTokenId,
       addr1.address,
       {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-      usedFUEL,
+      usedOM,
       minimumBid
     ];
     const bidId = await mandelbrotNFT.connect(addr1).callStatic.bid(...args);
     let tx = await mandelbrotNFT.connect(addr1).bid(...args);
     await tx.wait();
-    return { bidId, usedFUEL, minimumBid };
+    return { bidId, usedOM, minimumBid };
   }
 
 
@@ -47,10 +47,10 @@ describe("MandelbrotNFT contract", function () {
       expect(await mandelbrotNFT.owner()).to.equal(owner.address);
     });
 
-    it("Should assign the total supply of fuel to the owner", async function () {
+    it("Should assign the total supply of OM to the owner", async function () {
       const { mandelbrotNFT, owner } = await loadFixture(deployTokenFixture);
-      const ownerFUELBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.FUEL());
-      expect(ownerFUELBalance).to.equal(await mandelbrotNFT.TOTAL_SUPPLY());
+      const ownerOMBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.OM());
+      expect(ownerOMBalance).to.equal(await mandelbrotNFT.TOTAL_SUPPLY());
     });
 
     it("Should assign the origin token to the owner", async function () {
@@ -71,7 +71,7 @@ describe("MandelbrotNFT contract", function () {
       expect(originTokenMetadata.field.right).to.equal(3n * 16n ** 63n);
       expect(originTokenMetadata.field.bottom).to.equal(0);
       expect(originTokenMetadata.field.top).to.equal(3n * 16n ** 63n);
-      expect(originTokenMetadata.lockedFuel).to.equal(0);
+      expect(originTokenMetadata.lockedOM).to.equal(0);
       expect(originTokenMetadata.minimumBid).to.equal(await mandelbrotNFT.BASE_MINIMUM_BID());
     });
   });
@@ -80,13 +80,13 @@ describe("MandelbrotNFT contract", function () {
   describe("Bidding", function () {
     it("Should create a bid", async function () {
       const { mandelbrotNFT, owner, addr1, addr2 } = await loadFixture(deployTokenFixture);
-      const { addr1FUELBalance, addr2FUELBalance } = await loadFixture(fundAccounts);
-      const { bidId, usedFUEL, minimumBid } = await loadFixture(mint);
+      const { addr1OMBalance, addr2OMBalance } = await loadFixture(fundAccounts);
+      const { bidId, usedOM, minimumBid } = await loadFixture(mint);
       const originTokenId = 1;
 
       expect(bidId).to.equal(2);
-      const remainingFUELBalance = await mandelbrotNFT.balanceOf(addr1.address, await mandelbrotNFT.FUEL());
-      expect(remainingFUELBalance).to.equal(addr1FUELBalance - usedFUEL);
+      const remainingOMBalance = await mandelbrotNFT.balanceOf(addr1.address, await mandelbrotNFT.OM());
+      expect(remainingOMBalance).to.equal(addr1OMBalance - usedOM);
 
       const bids = await mandelbrotNFT.getBids(originTokenId);
       expect(bids.length).to.equal(1);
@@ -98,7 +98,7 @@ describe("MandelbrotNFT contract", function () {
       expect(bidMetadata.field.right).to.equal(2n * 16n ** 63n);
       expect(bidMetadata.field.bottom).to.equal(24n * 16n ** 62n);
       expect(bidMetadata.field.top).to.equal(2n * 16n ** 63n);
-      expect(bidMetadata.lockedFuel).to.equal(usedFUEL);
+      expect(bidMetadata.lockedOM).to.equal(usedOM);
       expect(bidMetadata.minimumBid).to.equal(minimumBid);
     });
 
@@ -107,13 +107,13 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const invalidTokenId = 10;
 
-      const usedFUEL = 5n * 10n ** 18n;
+      const usedOM = 5n * 10n ** 18n;
       const minimumBid = 20n * 10n ** 18n;
       const args = [
         invalidTokenId,
         addr1.address,
         {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await expect(mandelbrotNFT.connect(addr1).bid(...args)).to.be.revertedWithCustomError(mandelbrotNFT, "TokenNotFound");
@@ -124,13 +124,13 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const originTokenId = 1;
 
-      const usedFUEL = 5n * 10n ** 18n;
+      const usedOM = 5n * 10n ** 18n;
       const minimumBid = 20n * 10n ** 18n;
       const args = [
         originTokenId,
         addr1.address,
         {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await expect(mandelbrotNFT.connect(addr1).bid(...args)).to.be.revertedWithCustomError(mandelbrotNFT, "BidTooLow");
@@ -141,13 +141,13 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const originTokenId = 1;
 
-      const usedFUEL = 15n * 10n ** 18n;
+      const usedOM = 15n * 10n ** 18n;
       const minimumBid = 5n * 10n ** 18n;
       const args = [
         originTokenId,
         addr1.address,
         {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await expect(mandelbrotNFT.connect(addr1).bid(...args)).to.be.revertedWithCustomError(mandelbrotNFT, "MinimumBidTooLow");
@@ -158,13 +158,13 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const originTokenId = 1;
 
-      const usedFUEL = 15n * 10n ** 18n;
+      const usedOM = 15n * 10n ** 18n;
       const minimumBid = 20n * 10n ** 18n;
       const args = [
         originTokenId,
         addr1.address,
         {"left": 35n * 16n ** 62n, "right": 4n * 16n ** 63n, "bottom": 35n * 16n ** 62n, "top": 4n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await expect(mandelbrotNFT.connect(addr1).bid(...args)).to.be.revertedWithCustomError(mandelbrotNFT, "FieldOutside");
@@ -175,13 +175,13 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const originTokenId = 1;
 
-      const usedFUEL = 15n * 10n ** 18n;
+      const usedOM = 15n * 10n ** 18n;
       const minimumBid = 20n * 10n ** 18n;
       const args = [
         originTokenId,
         addr1.address,
         {"left": 24n * 16n ** 62n, "right": 3n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 3n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await expect(mandelbrotNFT.connect(addr1).bid(...args)).to.be.revertedWithCustomError(mandelbrotNFT, "FieldTooLarge");
@@ -191,13 +191,13 @@ describe("MandelbrotNFT contract", function () {
       const { mandelbrotNFT, owner, addr1, addr2 } = await loadFixture(deployTokenFixture);
       const originTokenId = 1;
 
-      const usedFUEL = 15n * 10n ** 18n;
+      const usedOM = 15n * 10n ** 18n;
       const minimumBid = 20n * 10n ** 18n;
       const args = [
         originTokenId,
         addr1.address,
         {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await expect(mandelbrotNFT.connect(addr1).bid(...args)).to.be.revertedWith("ERC1155: burn amount exceeds balance");
@@ -209,17 +209,17 @@ describe("MandelbrotNFT contract", function () {
     it("Should approve bid", async function () {
       const { mandelbrotNFT, owner, addr1, addr2 } = await loadFixture(deployTokenFixture);
       await loadFixture(fundAccounts);
-      const { bidId, usedFUEL, minimumBid } = await loadFixture(mint);
+      const { bidId, usedOM, minimumBid } = await loadFixture(mint);
       const originTokenId = 1;
 
-      let ownerFUELBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.FUEL());
-      expect(ownerFUELBalance).to.equal(9400n * 10n ** 18n);
+      let ownerOMBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.OM());
+      expect(ownerOMBalance).to.equal(9400n * 10n ** 18n);
 
       let tx = await mandelbrotNFT.batchApprove([bidId]);
       await tx.wait();
 
-      ownerFUELBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.FUEL());
-      expect(ownerFUELBalance).to.equal(BigInt(9400 + 15 * await mandelbrotNFT.MINT_FEE() / 100) * 10n ** 18n);
+      ownerOMBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.OM());
+      expect(ownerOMBalance).to.equal(BigInt(9400 + 15 * await mandelbrotNFT.MINT_FEE() / 100) * 10n ** 18n);
 
       const tokenBalance = await mandelbrotNFT.balanceOf(addr1.address, bidId);
       expect(tokenBalance).to.equal(1);
@@ -234,7 +234,7 @@ describe("MandelbrotNFT contract", function () {
       expect(tokenMetadata.field.right).to.equal(2n * 16n ** 63n);
       expect(tokenMetadata.field.bottom).to.equal(24n * 16n ** 62n);
       expect(tokenMetadata.field.top).to.equal(2n * 16n ** 63n);
-      expect(tokenMetadata.lockedFuel).to.equal(usedFUEL * (100n - BigInt(await mandelbrotNFT.MINT_FEE())) / 100n);
+      expect(tokenMetadata.lockedOM).to.equal(usedOM * (100n - BigInt(await mandelbrotNFT.MINT_FEE())) / 100n);
       expect(tokenMetadata.minimumBid).to.equal(minimumBid);
 
       expect((await mandelbrotNFT.getBids(originTokenId)).length).to.equal(0);
@@ -245,47 +245,47 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const originTokenId = 1;
 
-      let expectedOwnerFUELBalance = 9400n * 10n ** 18n;
-      let ownerFUELBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.FUEL());
-      expect(ownerFUELBalance).to.equal(expectedOwnerFUELBalance);
+      let expectedOwnerOMBalance = 9400n * 10n ** 18n;
+      let ownerOMBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.OM());
+      expect(ownerOMBalance).to.equal(expectedOwnerOMBalance);
 
-      const usedFUEL = 10n * 10n ** 18n;
+      const usedOM = 10n * 10n ** 18n;
       const minimumBid = 10n * 10n ** 18n;
       for (i = 0; i < 5; i++) {
         const args = [
           originTokenId,
           addr1.address,
           {"left": BigInt(i * 3) * 16n ** 62n, "right": BigInt(i * 3 + 2) * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-          usedFUEL,
+          usedOM,
           minimumBid
         ];
         await mandelbrotNFT.connect(addr1).bid(...args);
       }
       await mandelbrotNFT.batchApprove([2, 3, 4, 5, 6]);
 
-      expectedOwnerFUELBalance += BigInt(5 * 10 * await mandelbrotNFT.MINT_FEE() / 100) * 10n ** 18n;
-      ownerFUELBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.FUEL());
-      expect(ownerFUELBalance).to.equal(expectedOwnerFUELBalance);
+      expectedOwnerOMBalance += BigInt(5 * 10 * await mandelbrotNFT.MINT_FEE() / 100) * 10n ** 18n;
+      ownerOMBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.OM());
+      expect(ownerOMBalance).to.equal(expectedOwnerOMBalance);
 
-      let addr1FUELBalance = await mandelbrotNFT.balanceOf(addr1.address, await mandelbrotNFT.FUEL());
-      expect(addr1FUELBalance).to.equal(150n * 10n ** 18n);
+      let addr1OMBalance = await mandelbrotNFT.balanceOf(addr1.address, await mandelbrotNFT.OM());
+      expect(addr1OMBalance).to.equal(150n * 10n ** 18n);
 
       const args = [
         2,
         addr2.address,
         {"left": 1n * 16n ** 62n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await mandelbrotNFT.connect(addr2).bid(...args);
       await mandelbrotNFT.connect(addr1).batchApprove([7]);
 
-      addr1FUELBalance = await mandelbrotNFT.balanceOf(addr1.address, await mandelbrotNFT.FUEL());
-      expect(addr1FUELBalance).to.equal(BigInt(1500 + 100 * await mandelbrotNFT.MINT_FEE() / 100 * (1 - await mandelbrotNFT.UPSTREAM_SHARE() / 100)) * 10n ** 17n);
+      addr1OMBalance = await mandelbrotNFT.balanceOf(addr1.address, await mandelbrotNFT.OM());
+      expect(addr1OMBalance).to.equal(BigInt(1500 + 100 * await mandelbrotNFT.MINT_FEE() / 100 * (1 - await mandelbrotNFT.UPSTREAM_SHARE() / 100)) * 10n ** 17n);
 
-      expectedOwnerFUELBalance += BigInt(100 * await mandelbrotNFT.MINT_FEE() / 100 * await mandelbrotNFT.UPSTREAM_SHARE() / 100) * 10n ** 17n;
-      ownerFUELBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.FUEL());
-      expect(ownerFUELBalance).to.equal(expectedOwnerFUELBalance);
+      expectedOwnerOMBalance += BigInt(100 * await mandelbrotNFT.MINT_FEE() / 100 * await mandelbrotNFT.UPSTREAM_SHARE() / 100) * 10n ** 17n;
+      ownerOMBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.OM());
+      expect(ownerOMBalance).to.equal(expectedOwnerOMBalance);
     });
 
     it("Should distribute less fees hierarchically if not full", async function () {
@@ -293,89 +293,89 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const originTokenId = 1;
 
-      const FUEL = await mandelbrotNFT.FUEL();
+      const OM = await mandelbrotNFT.OM();
       const MINT_FEE = await mandelbrotNFT.MINT_FEE();
       const UPSTREAM_SHARE = await mandelbrotNFT.UPSTREAM_SHARE();
 
-      let expectedOwnerFUELBalance = 9400n * 10n ** 18n;
-      let ownerFUELBalance = await mandelbrotNFT.balanceOf(owner.address, FUEL);
-      expect(ownerFUELBalance).to.equal(expectedOwnerFUELBalance);
+      let expectedOwnerOMBalance = 9400n * 10n ** 18n;
+      let ownerOMBalance = await mandelbrotNFT.balanceOf(owner.address, OM);
+      expect(ownerOMBalance).to.equal(expectedOwnerOMBalance);
 
-      let expectedAddr1FUELBalance = 200n * 10n ** 18n;
-      let addr1FUELBalance = await mandelbrotNFT.balanceOf(addr1.address, FUEL);
-      expect(addr1FUELBalance).to.equal(expectedAddr1FUELBalance);
+      let expectedAddr1OMBalance = 200n * 10n ** 18n;
+      let addr1OMBalance = await mandelbrotNFT.balanceOf(addr1.address, OM);
+      expect(addr1OMBalance).to.equal(expectedAddr1OMBalance);
 
-      let expectedAddr2FUELBalance = 200n * 10n ** 18n;
-      let addr2FUELBalance = await mandelbrotNFT.balanceOf(addr2.address, FUEL);
-      expect(addr2FUELBalance).to.equal(expectedAddr2FUELBalance);
+      let expectedAddr2OMBalance = 200n * 10n ** 18n;
+      let addr2OMBalance = await mandelbrotNFT.balanceOf(addr2.address, OM);
+      expect(addr2OMBalance).to.equal(expectedAddr2OMBalance);
 
-      const usedFUEL = 10n * 10n ** 18n;
+      const usedOM = 10n * 10n ** 18n;
       const minimumBid = 10n * 10n ** 18n;
       let args = [
         originTokenId,
         addr1.address,
         {"left": 0n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await mandelbrotNFT.connect(addr1).bid(...args);
       await mandelbrotNFT.batchApprove([2]);
 
-      expectedOwnerFUELBalance += BigInt(10 * MINT_FEE / 100) * 10n ** 18n;
-      ownerFUELBalance = await mandelbrotNFT.balanceOf(owner.address, FUEL);
-      expect(ownerFUELBalance).to.equal(expectedOwnerFUELBalance);
+      expectedOwnerOMBalance += BigInt(10 * MINT_FEE / 100) * 10n ** 18n;
+      ownerOMBalance = await mandelbrotNFT.balanceOf(owner.address, OM);
+      expect(ownerOMBalance).to.equal(expectedOwnerOMBalance);
 
-      expectedAddr1FUELBalance -= 10n * 10n ** 18n;
-      addr1FUELBalance = await mandelbrotNFT.balanceOf(addr1.address, FUEL);
-      expect(addr1FUELBalance).to.equal(expectedAddr1FUELBalance);
+      expectedAddr1OMBalance -= 10n * 10n ** 18n;
+      addr1OMBalance = await mandelbrotNFT.balanceOf(addr1.address, OM);
+      expect(addr1OMBalance).to.equal(expectedAddr1OMBalance);
 
       for (i = 0; i < 3; i++) {
         args = [
           2,
           addr2.address,
           {"left": BigInt(i * 3) * 16n ** 61n, "right": BigInt(i * 3 + 2) * 16n ** 61n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-          usedFUEL,
+          usedOM,
           minimumBid
         ];
         await mandelbrotNFT.connect(addr2).bid(...args);
       }
       await mandelbrotNFT.connect(addr1).batchApprove([3, 4, 5]);
 
-      expectedOwnerFUELBalance += BigInt(3 * 100 * MINT_FEE / 100 * UPSTREAM_SHARE / 100) * 10n ** 17n;
-      ownerFUELBalance = await mandelbrotNFT.balanceOf(owner.address, FUEL);
-      expect(ownerFUELBalance).to.equal(expectedOwnerFUELBalance);
+      expectedOwnerOMBalance += BigInt(3 * 100 * MINT_FEE / 100 * UPSTREAM_SHARE / 100) * 10n ** 17n;
+      ownerOMBalance = await mandelbrotNFT.balanceOf(owner.address, OM);
+      expect(ownerOMBalance).to.equal(expectedOwnerOMBalance);
 
-      expectedAddr1FUELBalance += BigInt(3 * 100 * MINT_FEE / 100 * (1 - UPSTREAM_SHARE / 100)) * 10n ** 17n;
-      addr1FUELBalance = await mandelbrotNFT.balanceOf(addr1.address, FUEL);
-      expect(addr1FUELBalance).to.equal(expectedAddr1FUELBalance);
+      expectedAddr1OMBalance += BigInt(3 * 100 * MINT_FEE / 100 * (1 - UPSTREAM_SHARE / 100)) * 10n ** 17n;
+      addr1OMBalance = await mandelbrotNFT.balanceOf(addr1.address, OM);
+      expect(addr1OMBalance).to.equal(expectedAddr1OMBalance);
 
-      expectedAddr2FUELBalance -= 3n * 10n * 10n ** 18n;
-      addr2FUELBalance = await mandelbrotNFT.balanceOf(addr2.address, FUEL);
-      expect(addr1FUELBalance).to.equal(expectedAddr1FUELBalance);
+      expectedAddr2OMBalance -= 3n * 10n * 10n ** 18n;
+      addr2OMBalance = await mandelbrotNFT.balanceOf(addr2.address, OM);
+      expect(addr1OMBalance).to.equal(expectedAddr1OMBalance);
 
       args = [
         3,
         addr2.address,
         {"left": 0n, "right": 2n * 10n ** 15n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await mandelbrotNFT.connect(addr3).bid(...args);
       await mandelbrotNFT.connect(addr2).batchApprove([6]);
 
       let addr2share = BigInt(100 * MINT_FEE / 100 * (1 - UPSTREAM_SHARE / 100)) * 10n ** 17n;
-      expectedAddr2FUELBalance += addr2share;
-      addr2FUELBalance = await mandelbrotNFT.balanceOf(addr2.address, FUEL);
-      expect(addr2FUELBalance).to.equal(expectedAddr2FUELBalance);
+      expectedAddr2OMBalance += addr2share;
+      addr2OMBalance = await mandelbrotNFT.balanceOf(addr2.address, OM);
+      expect(addr2OMBalance).to.equal(expectedAddr2OMBalance);
 
       let addr1share = (BigInt(10 * MINT_FEE / 100) * 10n ** 18n - addr2share) * (100n - BigInt(1 * UPSTREAM_SHARE + (100 - UPSTREAM_SHARE) * (1 - 3 / 5))) / 100n;
-      expectedAddr1FUELBalance += addr1share;
-      addr1FUELBalance = await mandelbrotNFT.balanceOf(addr1.address, FUEL);
-      expect(addr1FUELBalance).to.equal(expectedAddr1FUELBalance);
+      expectedAddr1OMBalance += addr1share;
+      addr1OMBalance = await mandelbrotNFT.balanceOf(addr1.address, OM);
+      expect(addr1OMBalance).to.equal(expectedAddr1OMBalance);
 
-      expectedOwnerFUELBalance += BigInt(10 * MINT_FEE / 100) * 10n ** 18n - addr2share - addr1share;
-      ownerFUELBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.FUEL());
-      expect(ownerFUELBalance).to.equal(expectedOwnerFUELBalance);
+      expectedOwnerOMBalance += BigInt(10 * MINT_FEE / 100) * 10n ** 18n - addr2share - addr1share;
+      ownerOMBalance = await mandelbrotNFT.balanceOf(owner.address, await mandelbrotNFT.OM());
+      expect(ownerOMBalance).to.equal(expectedOwnerOMBalance);
     });
 
     it("Should revert with BidNotFound", async function () {
@@ -388,7 +388,7 @@ describe("MandelbrotNFT contract", function () {
     it("Should revert with NoRightsToApproveBid", async function () {
       const { mandelbrotNFT, owner, addr1, addr2 } = await loadFixture(deployTokenFixture);
       await loadFixture(fundAccounts);
-      const { bidId, usedFUEL, minimumBid } = await loadFixture(mint);
+      const { bidId, usedOM, minimumBid } = await loadFixture(mint);
       
       await expect(mandelbrotNFT.connect(addr1).approve(bidId)).to.be.revertedWithCustomError(mandelbrotNFT, "NoRightsToApproveBid");
     });
@@ -398,14 +398,14 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const originTokenId = 1;
 
-      const usedFUEL = 15n * 10n ** 18n;
+      const usedOM = 15n * 10n ** 18n;
       const minimumBid = 20n * 10n ** 18n;
       for (i = 0; i < 6; i++) {
         const args = [
           originTokenId,
           addr1.address,
           {"left": BigInt(i * 3) * 16n ** 62n, "right": BigInt(i * 3 + 2) * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-          usedFUEL,
+          usedOM,
           minimumBid
         ];
         await mandelbrotNFT.connect(addr1).bid(...args);
@@ -419,14 +419,14 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const originTokenId = 1;
 
-      const usedFUEL = 15n * 10n ** 18n;
+      const usedOM = 15n * 10n ** 18n;
       const minimumBid = 20n * 10n ** 18n;
       for (i = 0; i < 6; i++) {
         const args = [
           originTokenId,
           addr1.address,
           {"left": BigInt(i * 3) * 16n ** 62n, "right": BigInt(i * 3 + 5) * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-          usedFUEL,
+          usedOM,
           minimumBid
         ];
         await mandelbrotNFT.connect(addr1).bid(...args);
@@ -442,13 +442,13 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const originTokenId = 1;
 
-      const usedFUEL = 10n * 10n ** 18n;
+      const usedOM = 10n * 10n ** 18n;
       const minimumBid = 10n * 10n ** 18n;
       let args = [
         originTokenId,
         addr1.address,
         {"left": 0n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await mandelbrotNFT.connect(addr1).bid(...args);
@@ -458,7 +458,7 @@ describe("MandelbrotNFT contract", function () {
         2,
         addr2.address,
         {"left": 0n, "right": 2n * 16n ** 61n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await mandelbrotNFT.connect(addr2).bid(...args);
@@ -468,7 +468,7 @@ describe("MandelbrotNFT contract", function () {
         3,
         addr2.address,
         {"left": 0n, "right": 2n * 16n ** 60n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await mandelbrotNFT.connect(addr3).bid(...args);
@@ -482,13 +482,13 @@ describe("MandelbrotNFT contract", function () {
       await loadFixture(fundAccounts);
       const originTokenId = 1;
 
-      const usedFUEL = 10n * 10n ** 18n;
+      const usedOM = 10n * 10n ** 18n;
       const minimumBid = 10n * 10n ** 18n;
       let args = [
         originTokenId,
         addr1.address,
         {"left": 0n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await mandelbrotNFT.connect(addr1).bid(...args);
@@ -498,7 +498,7 @@ describe("MandelbrotNFT contract", function () {
         2,
         addr1.address,
         {"left": 0n, "right": 2n * 16n ** 61n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await mandelbrotNFT.connect(addr1).bid(...args);
@@ -508,7 +508,7 @@ describe("MandelbrotNFT contract", function () {
         3,
         addr1.address,
         {"left": 0n, "right": 2n * 16n ** 60n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
-        usedFUEL,
+        usedOM,
         minimumBid
       ];
       await mandelbrotNFT.connect(addr1).bid(...args);
