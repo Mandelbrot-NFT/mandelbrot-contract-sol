@@ -9,7 +9,6 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 contract MandelbrotNFT is ERC1155, Ownable {
     uint256 public constant OM = 0;
 
-    string public constant BASE_URL = "https://mandelbrot-service.onrender.com/";
     uint256 public constant TOTAL_SUPPLY = 10000 * 10 ** 18;
     uint256 public constant BASE_MINIMUM_BID = 10 * 10 ** 18;
     uint256 public constant MAX_CHILDREN = 5;
@@ -61,7 +60,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
     error FieldTooLarge(); // Token's field cannot exceed MAXIMUM_FIELD_PORTION % of its parent's
     error NoCommonParent(); // Bids being approved are inside of different tokens
 
-    constructor() ERC1155("") Ownable(msg.sender) {
+    constructor() ERC1155("https://mandelbrot-service.onrender.com/{id}") Ownable(msg.sender) {
         _mint(msg.sender, OM, TOTAL_SUPPLY, "");
         Field memory field = Field({left: 0, bottom: 0, right: 3 * 16 ** 63, top: 3 * 16 ** 63});
         _mintInternal(0, msg.sender, field, 0, BASE_MINIMUM_BID);
@@ -272,10 +271,6 @@ contract MandelbrotNFT is ERC1155, Ownable {
         delete _metadata[tokenId];
 
         _burn(msg.sender, tokenId, 1);
-    }
-
-    function uri(uint256 tokenId) public pure override returns (string memory) {
-        return string.concat(BASE_URL, Strings.toString(tokenId));
     }
 
     function _getLayer(uint256 tokenId) internal view returns (uint256) {
