@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0 <0.9.0;
 
-import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "hardhat/console.sol";
-
+import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+// import "hardhat/console.sol";
 
 contract MandelbrotNFT is ERC1155, Ownable {
-    using Counters for Counters.Counter;
-
     uint256 public constant OM = 0;
 
     string public constant BASE_URL = "https://mandelbrot-service.onrender.com/";
@@ -46,7 +42,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 layer;
     }
 
-    Counters.Counter private _tokenIds;
+    uint256 private _tokenIds;
     mapping(uint256 => Metadata) private _metadata;
     mapping(uint256 => uint256[]) private _children;
     mapping(uint256 => uint256[]) private _bidIds;
@@ -65,57 +61,61 @@ contract MandelbrotNFT is ERC1155, Ownable {
     error FieldTooLarge(); // Token's field cannot exceed MAXIMUM_FIELD_PORTION % of its parent's
     error NoCommonParent(); // Bids being approved are inside of different tokens
 
-    constructor() ERC1155("") {
+    constructor() ERC1155("") Ownable(msg.sender) {
         _mint(msg.sender, OM, TOTAL_SUPPLY, "");
-        Field memory field = Field(0, 0, 3 * 16 ** 63, 3 * 16 ** 63);
+        Field memory field = Field({left: 0, bottom: 0, right: 3 * 16 ** 63, top: 3 * 16 ** 63});
         _mintInternal(0, msg.sender, field, 0, BASE_MINIMUM_BID);
     }
 
     modifier tokenExists(uint256 tokenId) {
-        if (_metadata[tokenId].owner == address(0) || balanceOf(_metadata[tokenId].owner, tokenId) == 0) revert TokenNotFound();
+        _tokenExists(tokenId);
         _;
     }
 
+    function _tokenExists(uint256 tokenId) internal view {
+        if (_metadata[tokenId].owner == address(0) || balanceOf(_metadata[tokenId].owner, tokenId) == 0) {
+            revert TokenNotFound();
+        }
+    }
+
     modifier bidExists(uint256 bidId) {
-        if (_metadata[bidId].owner == address(0) || balanceOf(_metadata[bidId].owner, bidId) == 1) revert BidNotFound();
+        _bidExists(bidId);
         _;
+    }
+
+    function _bidExists(uint256 bidId) internal view {
+        if (_metadata[bidId].owner == address(0) || balanceOf(_metadata[bidId].owner, bidId) == 1) {
+            revert BidNotFound();
+        }
     }
 
     function _validateBidField(uint256 parentId, Field memory field) internal view {
         Field storage parentField = _metadata[parentId].field;
-        if (field.left < parentField.left ||
-            field.right > parentField.right ||
-            field.bottom < parentField.bottom ||
-            field.top > parentField.top) revert FieldOutside();
-        if (100 /
-            (((parentField.right - parentField.left) / (field.right - field.left)) *
-             ((parentField.top - parentField.bottom) / (field.top - field.bottom))) >
-            MAXIMUM_FIELD_PORTION) revert FieldTooLarge();
+        if (
+            field.left < parentField.left || field.right > parentField.right || field.bottom < parentField.bottom
+                || field.top > parentField.top
+        ) revert FieldOutside();
+        if (
+            100
+                    / (((parentField.right - parentField.left) / (field.right - field.left))
+                        * ((parentField.top - parentField.bottom) / (field.top - field.bottom))) > MAXIMUM_FIELD_PORTION
+        ) revert FieldTooLarge();
     }
 
     function _validateTokenField(uint256 parentId, Field memory field) internal view {
         uint256[] storage children = _children[parentId];
-        for (uint i = 0; i < children.length; i++) {
+        for (uint256 i = 0; i < children.length; i++) {
             Field storage siblingField = _metadata[children[i]].field;
-            if (!(field.left > siblingField.right ||
-                  field.right < siblingField.left ||
-                  field.bottom > siblingField.top ||
-                  field.top < siblingField.bottom)) revert FieldsOverlap();
+            if (!(field.left > siblingField.right || field.right < siblingField.left || field.bottom > siblingField.top
+                        || field.top < siblingField.bottom)) revert FieldsOverlap();
         }
     }
 
-    function _afterTokenTransfer(
-        address operator,
-        address from,
-        address to,
-        uint256[] memory ids,
-        uint256[] memory amounts,
-        bytes memory data
-    ) internal override {
-        super._afterTokenTransfer(operator, from, to, ids, amounts, data);
-        for (uint i = 0; i < ids.length; i++) {
+    function _update(address from, address to, uint256[] memory ids, uint256[] memory values) internal override {
+        super._update(from, to, ids, values);
+        for (uint256 i = 0; i < ids.length; i++) {
             uint256 tokenId = ids[i];
-            if (tokenId > 0) {
+            if (tokenId != OM) {
                 _metadata[tokenId].owner = to;
             }
         }
@@ -129,14 +129,14 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 minimumBid
     ) internal returns (uint256) {
         if (minimumBid < _metadata[parentId].minimumBid) revert MinimumBidTooLow();
-        _tokenIds.increment();
-        uint256 newItemId = _tokenIds.current();
+        uint256 newItemId = ++_tokenIds;
         _mint(recipient, newItemId, 1, "");
-        _metadata[newItemId] = Metadata(recipient, parentId, field, lockedOM, minimumBid);
+        _metadata[newItemId] =
+            Metadata({owner: recipient, parentId: parentId, field: field, lockedOM: lockedOM, minimumBid: minimumBid});
         return newItemId;
     }
 
-    function _deleteBid(uint256 bidId) bidExists(bidId) internal {
+    function _deleteBid(uint256 bidId) internal bidExists(bidId) {
         uint256[] storage bidIds = _bidIds[_metadata[bidId].parentId];
         for (uint256 i; i < bidIds.length; i++) {
             if (bidIds[i] == bidId) {
@@ -149,13 +149,11 @@ contract MandelbrotNFT is ERC1155, Ownable {
         delete _metadata[bidId];
     }
 
-    function bid(
-        uint256 parentId,
-        address recipient,
-        Field calldata field,
-        uint256 amount,
-        uint256 minimumBid
-    ) tokenExists(parentId) external returns (uint256) {
+    function bid(uint256 parentId, address recipient, Field calldata field, uint256 amount, uint256 minimumBid)
+        external
+        tokenExists(parentId)
+        returns (uint256)
+    {
         uint256 parentMinimumBid = _metadata[parentId].minimumBid;
         if (amount < parentMinimumBid) revert BidTooLow();
         if (minimumBid < parentMinimumBid) revert MinimumBidTooLow();
@@ -164,14 +162,14 @@ contract MandelbrotNFT is ERC1155, Ownable {
         _burn(msg.sender, OM, amount);
         // _safeTransferFrom(msg.sender, address(this), OM, amount, "");
 
-        _tokenIds.increment();
-        uint256 newBidId = _tokenIds.current();
-        _metadata[newBidId] = Metadata(recipient, parentId, field, amount, minimumBid);
+        uint256 newBidId = ++_tokenIds;
+        _metadata[newBidId] =
+            Metadata({owner: recipient, parentId: parentId, field: field, lockedOM: amount, minimumBid: minimumBid});
         _bidIds[parentId].push(newBidId);
         return newBidId;
     }
 
-    function _approve(uint256 bidId) bidExists(bidId) internal returns (uint256) {
+    function _approve(uint256 bidId) internal bidExists(bidId) returns (uint256) {
         Metadata storage bid_ = _metadata[bidId];
         uint256 parentId = bid_.parentId;
         if (msg.sender != _metadata[parentId].owner) revert NoRightsToApproveBid();
@@ -198,17 +196,18 @@ contract MandelbrotNFT is ERC1155, Ownable {
     }
 
     function _distribute(uint256 ancestorId, uint256 amount) internal {
-        uint256 upstream_share = UPSTREAM_SHARE;
+        uint256 upstreamShare = UPSTREAM_SHARE;
         while (true) {
             Metadata storage ancestor = _metadata[ancestorId];
             if (ancestor.parentId == 0) {
                 _mint(ancestor.owner, OM, amount, "");
                 break;
             } else {
-                _mint(ancestor.owner, OM, amount * (100 - upstream_share) / 100, "");
-                amount = amount * upstream_share / 100;
+                _mint(ancestor.owner, OM, amount * (100 - upstreamShare) / 100, "");
+                amount = amount * upstreamShare / 100;
                 ancestorId = ancestor.parentId;
-                upstream_share = UPSTREAM_SHARE + (100 - UPSTREAM_SHARE) * (100 - 100 * _children[ancestorId].length / MAX_CHILDREN) / 100;
+                upstreamShare = UPSTREAM_SHARE + (100 - UPSTREAM_SHARE)
+                    * (100 - 100 * _children[ancestorId].length / MAX_CHILDREN) / 100;
             }
         }
     }
@@ -231,7 +230,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         _distribute(parentId, fees);
     }
 
-    function deleteBid(uint256 bidId) bidExists(bidId) external {
+    function deleteBid(uint256 bidId) external bidExists(bidId) {
         Metadata storage bid_ = _metadata[bidId];
         if (msg.sender != bid_.owner) revert NoRightsToDeleteBid();
         _deleteBid(bidId);
@@ -249,7 +248,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
     //     return newItemId;
     // }
 
-    function burn(uint256 tokenId) tokenExists(tokenId) external {
+    function burn(uint256 tokenId) external tokenExists(tokenId) {
         if (msg.sender != _metadata[tokenId].owner) revert NoRightsToBurn();
         if (_children[tokenId].length != 0) revert TokenNotEmpty();
 
@@ -289,50 +288,87 @@ contract MandelbrotNFT is ERC1155, Ownable {
         return result - 1;
     }
 
-    function getBids(uint256 parentId) tokenExists(parentId) external view returns (MetadataView[] memory) {
+    function getBids(uint256 parentId) external view tokenExists(parentId) returns (MetadataView[] memory) {
         uint256 layer = _getLayer(parentId) + 1;
         uint256[] storage bidIds = _bidIds[parentId];
         MetadataView[] memory result = new MetadataView[](bidIds.length);
-        for (uint i = 0; i < bidIds.length; i++) {
+        for (uint256 i = 0; i < bidIds.length; i++) {
             Metadata storage bid_ = _metadata[bidIds[i]];
-            result[i] = (MetadataView(bidIds[i], bid_.owner, parentId, bid_.field, bid_.lockedOM, bid_.minimumBid, layer));
+            result[i] =
+            (MetadataView({
+                    tokenId: bidIds[i],
+                    owner: bid_.owner,
+                    parentId: parentId,
+                    field: bid_.field,
+                    lockedOM: bid_.lockedOM,
+                    minimumBid: bid_.minimumBid,
+                    layer: layer
+                }));
         }
         return result;
     }
 
-    function getMetadata(uint256 tokenId) tokenExists(tokenId) external view returns (MetadataView memory) {
+    function getMetadata(uint256 tokenId) external view tokenExists(tokenId) returns (MetadataView memory) {
         uint256 layer = _getLayer(tokenId);
         Metadata storage metadata = _metadata[tokenId];
-        return MetadataView(tokenId, metadata.owner, metadata.parentId, metadata.field, metadata.lockedOM, metadata.minimumBid, layer);
+        return MetadataView({
+            tokenId: tokenId,
+            owner: metadata.owner,
+            parentId: metadata.parentId,
+            field: metadata.field,
+            lockedOM: metadata.lockedOM,
+            minimumBid: metadata.minimumBid,
+            layer: layer
+        });
     }
 
-    function getChildrenMetadata(uint256 parentId) tokenExists(parentId) external view returns (MetadataView[] memory) {
+    function getChildrenMetadata(uint256 parentId) external view tokenExists(parentId) returns (MetadataView[] memory) {
         uint256 layer = _getLayer(parentId) + 1;
         uint256[] storage children = _children[parentId];
         MetadataView[] memory result = new MetadataView[](children.length);
-        for (uint i = 0; i < children.length; i++) {
+        for (uint256 i = 0; i < children.length; i++) {
             Metadata storage metadata = _metadata[children[i]];
-            result[i] = MetadataView(children[i], metadata.owner, parentId, metadata.field, metadata.lockedOM, metadata.minimumBid, layer);
+            result[i] = MetadataView({
+                tokenId: children[i],
+                owner: metadata.owner,
+                parentId: parentId,
+                field: metadata.field,
+                lockedOM: metadata.lockedOM,
+                minimumBid: metadata.minimumBid,
+                layer: layer
+            });
         }
         return result;
     }
 
-    function getAncestryMetadata(uint256 tokenId) tokenExists(tokenId) external view returns (MetadataView[] memory) {
+    function getAncestryMetadata(uint256 tokenId) external view tokenExists(tokenId) returns (MetadataView[] memory) {
         uint256 layer = _getLayer(tokenId);
         MetadataView[] memory result = new MetadataView[](layer + 1);
         uint256 ancestorId = tokenId;
-        for (uint i = 0; i < layer + 1; i++) {
+        for (uint256 i = 0; i < layer + 1; i++) {
             Metadata storage metadata = _metadata[ancestorId];
-            result[i] = MetadataView(ancestorId, metadata.owner, metadata.parentId, metadata.field, metadata.lockedOM, metadata.minimumBid, layer - i);
+            result[i] = MetadataView({
+                tokenId: ancestorId,
+                owner: metadata.owner,
+                parentId: metadata.parentId,
+                field: metadata.field,
+                lockedOM: metadata.lockedOM,
+                minimumBid: metadata.minimumBid,
+                layer: layer - i
+            });
             ancestorId = metadata.parentId;
         }
         return result;
     }
 
-    function getOwnedItems(address owner) external view returns (MetadataView[] memory tokens, MetadataView[] memory bids) {
-        uint tokenCounter = 0;
-        uint bidCounter = 0;
-        for (uint i = 1; i <= _tokenIds.current(); i++) {
+    function getOwnedItems(address owner)
+        external
+        view
+        returns (MetadataView[] memory tokens, MetadataView[] memory bids)
+    {
+        uint256 tokenCounter = 0;
+        uint256 bidCounter = 0;
+        for (uint256 i = 1; i <= _tokenIds; i++) {
             Metadata storage metadata = _metadata[i];
             if (metadata.owner == owner) {
                 if (balanceOf(owner, i) == 1) {
@@ -347,10 +383,18 @@ contract MandelbrotNFT is ERC1155, Ownable {
         bids = new MetadataView[](bidCounter);
         tokenCounter = 0;
         bidCounter = 0;
-        for (uint i = 1; i <= _tokenIds.current(); i++) {
+        for (uint256 i = 1; i <= _tokenIds; i++) {
             Metadata storage metadata = _metadata[i];
             if (metadata.owner == owner) {
-                MetadataView memory view_ = MetadataView(i, metadata.owner, metadata.parentId, metadata.field, metadata.lockedOM, metadata.minimumBid, 0);
+                MetadataView memory view_ = MetadataView({
+                    tokenId: i,
+                    owner: metadata.owner,
+                    parentId: metadata.parentId,
+                    field: metadata.field,
+                    lockedOM: metadata.lockedOM,
+                    minimumBid: metadata.minimumBid,
+                    layer: 0
+                });
                 if (balanceOf(owner, i) == 1) {
                     tokens[tokenCounter] = view_;
                     tokenCounter++;
@@ -362,7 +406,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         }
     }
 
-    function setMinimumBid(uint256 tokenId, uint256 minimumBid) tokenExists(tokenId) external {
+    function setMinimumBid(uint256 tokenId, uint256 minimumBid) external tokenExists(tokenId) {
         if (minimumBid < _metadata[_metadata[tokenId].parentId].minimumBid) revert MinimumBidTooLow();
         _metadata[tokenId].minimumBid = minimumBid;
     }

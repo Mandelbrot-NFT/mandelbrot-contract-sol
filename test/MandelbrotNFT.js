@@ -187,7 +187,7 @@ describe("MandelbrotNFT contract", function () {
       await expect(mandelbrotNFT.connect(addr1).bid(...args)).to.be.revertedWithCustomError(mandelbrotNFT, "FieldTooLarge");
     });
 
-    it("Should revert with 'ERC1155: burn amount exceeds balance'", async function () {
+    it("Should revert with ERC1155InsufficientBalance", async function () {
       const { mandelbrotNFT, owner, addr1, addr2 } = await loadFixture(deployTokenFixture);
       const originTokenId = 1;
 
@@ -200,7 +200,7 @@ describe("MandelbrotNFT contract", function () {
         usedOM,
         minimumBid
       ];
-      await expect(mandelbrotNFT.connect(addr1).bid(...args)).to.be.revertedWith("ERC1155: burn amount exceeds balance");
+      await expect(mandelbrotNFT.connect(addr1).bid(...args)).to.be.revertedWithCustomError(mandelbrotNFT, "ERC1155InsufficientBalance");
     });
   });
 
