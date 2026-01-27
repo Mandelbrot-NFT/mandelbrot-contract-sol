@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity >=0.8.0 <0.9.0;
 
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {ERC1155Supply} from "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 // import "hardhat/console.sol";
 
-contract MandelbrotNFT is ERC1155, Ownable {
-    uint256 public constant OM = 0;
+abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
+    uint256 public constant FUEL = 0;
 
     uint256 public constant TOTAL_SUPPLY = 10000 * 10 ** 18;
     uint256 public constant BASE_MINIMUM_BID = 10 * 10 ** 18;
@@ -27,7 +28,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         address owner;
         uint256 parentId;
         Field field;
-        uint256 lockedOM;
+        uint256 lockedFUEL;
         uint256 minimumBid;
     }
 
@@ -36,7 +37,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
         address owner;
         uint256 parentId;
         Field field;
-        uint256 lockedOM;
+        uint256 lockedFUEL;
         uint256 minimumBid;
         uint256 layer;
     }
@@ -60,10 +61,10 @@ contract MandelbrotNFT is ERC1155, Ownable {
     error FieldTooLarge(); // Token's field cannot exceed MAXIMUM_FIELD_PORTION % of its parent's
     error NoCommonParent(); // Bids being approved are inside of different tokens
 
-    constructor() ERC1155("https://mandelbrot-service.onrender.com/{id}") Ownable(msg.sender) {
-        _mint(msg.sender, OM, TOTAL_SUPPLY, "");
+    constructor() ERC1155("https://mandelbrot-service.onrender.com/{id}") Ownable(_msgSender()) {
+        _mint(_msgSender(), FUEL, TOTAL_SUPPLY, "");
         Field memory field = Field({left: 0, bottom: 0, right: 3 * 16 ** 63, top: 3 * 16 ** 63});
-        _mintInternal(0, msg.sender, field, 0, BASE_MINIMUM_BID);
+        _mintInternal(0, _msgSender(), field, 0, BASE_MINIMUM_BID);
     }
 
     modifier tokenExists(uint256 tokenId) {
@@ -110,11 +111,11 @@ contract MandelbrotNFT is ERC1155, Ownable {
         }
     }
 
-    function _update(address from, address to, uint256[] memory ids, uint256[] memory values) internal override {
+    function _update(address from, address to, uint256[] memory ids, uint256[] memory values) internal override(ERC1155, ERC1155Supply) {
         super._update(from, to, ids, values);
         for (uint256 i = 0; i < ids.length; i++) {
             uint256 tokenId = ids[i];
-            if (tokenId != OM) {
+            if (tokenId != FUEL) {
                 _metadata[tokenId].owner = to;
             }
         }
@@ -124,14 +125,14 @@ contract MandelbrotNFT is ERC1155, Ownable {
         uint256 parentId,
         address recipient,
         Field memory field,
-        uint256 lockedOM,
+        uint256 lockedFUEL,
         uint256 minimumBid
     ) internal returns (uint256) {
         if (minimumBid < _metadata[parentId].minimumBid) revert MinimumBidTooLow();
         uint256 newItemId = ++_tokenIds;
         _mint(recipient, newItemId, 1, "");
         _metadata[newItemId] =
-            Metadata({owner: recipient, parentId: parentId, field: field, lockedOM: lockedOM, minimumBid: minimumBid});
+            Metadata({owner: recipient, parentId: parentId, field: field, lockedFUEL: lockedFUEL, minimumBid: minimumBid});
         return newItemId;
     }
 
@@ -144,7 +145,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
                 break;
             }
         }
-        _mint(_metadata[bidId].owner, OM, _metadata[bidId].lockedOM, "");
+        _mint(_metadata[bidId].owner, FUEL, _metadata[bidId].lockedFUEL, "");
         delete _metadata[bidId];
     }
 
@@ -158,12 +159,12 @@ contract MandelbrotNFT is ERC1155, Ownable {
         if (minimumBid < parentMinimumBid) revert MinimumBidTooLow();
         _validateBidField(parentId, field);
 
-        _burn(msg.sender, OM, amount);
-        // _safeTransferFrom(msg.sender, address(this), OM, amount, "");
+        _burn(_msgSender(), FUEL, amount);
+        // _safeTransferFrom(_msgSender(), address(this), OM, amount, "");
 
         uint256 newBidId = ++_tokenIds;
         _metadata[newBidId] =
-            Metadata({owner: recipient, parentId: parentId, field: field, lockedOM: amount, minimumBid: minimumBid});
+            Metadata({owner: recipient, parentId: parentId, field: field, lockedFUEL: amount, minimumBid: minimumBid});
         _bidIds[parentId].push(newBidId);
         return newBidId;
     }
@@ -171,13 +172,13 @@ contract MandelbrotNFT is ERC1155, Ownable {
     function _approve(uint256 bidId) internal bidExists(bidId) returns (uint256) {
         Metadata storage bid_ = _metadata[bidId];
         uint256 parentId = bid_.parentId;
-        if (msg.sender != _metadata[parentId].owner) revert NoRightsToApproveBid();
+        if (_msgSender() != _metadata[parentId].owner) revert NoRightsToApproveBid();
         uint256[] storage children = _children[parentId];
         if (children.length == MAX_CHILDREN) revert TooManyChildTokens();
         _validateTokenField(parentId, bid_.field);
 
-        uint256 fee = bid_.lockedOM * MINT_FEE / 100;
-        bid_.lockedOM -= fee;
+        uint256 fee = bid_.lockedFUEL * MINT_FEE / 100;
+        bid_.lockedFUEL -= fee;
 
         _mint(bid_.owner, bidId, 1, "");
         children.push(bidId);
@@ -199,10 +200,10 @@ contract MandelbrotNFT is ERC1155, Ownable {
         while (true) {
             Metadata storage ancestor = _metadata[ancestorId];
             if (ancestor.parentId == 0) {
-                _mint(ancestor.owner, OM, amount, "");
+                _mint(ancestor.owner, FUEL, amount, "");
                 break;
             } else {
-                _mint(ancestor.owner, OM, amount * (100 - upstreamShare) / 100, "");
+                _mint(ancestor.owner, FUEL, amount * (100 - upstreamShare) / 100, "");
                 amount = amount * upstreamShare / 100;
                 ancestorId = ancestor.parentId;
                 upstreamShare = UPSTREAM_SHARE + (100 - UPSTREAM_SHARE)
@@ -231,7 +232,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
 
     function deleteBid(uint256 bidId) external bidExists(bidId) {
         Metadata storage bid_ = _metadata[bidId];
-        if (msg.sender != bid_.owner) revert NoRightsToDeleteBid();
+        if (_msgSender() != bid_.owner) revert NoRightsToDeleteBid();
         _deleteBid(bidId);
         if (_bidIds[bid_.parentId].length == 0) {
             delete _bidIds[bidId];
@@ -248,7 +249,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
     // }
 
     function burn(uint256 tokenId) external tokenExists(tokenId) {
-        if (msg.sender != _metadata[tokenId].owner) revert NoRightsToBurn();
+        if (_msgSender() != _metadata[tokenId].owner) revert NoRightsToBurn();
         if (_children[tokenId].length != 0) revert TokenNotEmpty();
 
         delete _children[tokenId];
@@ -267,10 +268,10 @@ contract MandelbrotNFT is ERC1155, Ownable {
                 break;
             }
         }
-        _mint(msg.sender, OM, _metadata[tokenId].lockedOM, "");
+        _mint(_msgSender(), FUEL, _metadata[tokenId].lockedFUEL, "");
         delete _metadata[tokenId];
 
-        _burn(msg.sender, tokenId, 1);
+        _burn(_msgSender(), tokenId, 1);
     }
 
     function _getLayer(uint256 tokenId) internal view returns (uint256) {
@@ -295,7 +296,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
                     owner: bid_.owner,
                     parentId: parentId,
                     field: bid_.field,
-                    lockedOM: bid_.lockedOM,
+                    lockedFUEL: bid_.lockedFUEL,
                     minimumBid: bid_.minimumBid,
                     layer: layer
                 }));
@@ -311,7 +312,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
             owner: metadata.owner,
             parentId: metadata.parentId,
             field: metadata.field,
-            lockedOM: metadata.lockedOM,
+            lockedFUEL: metadata.lockedFUEL,
             minimumBid: metadata.minimumBid,
             layer: layer
         });
@@ -328,7 +329,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
                 owner: metadata.owner,
                 parentId: parentId,
                 field: metadata.field,
-                lockedOM: metadata.lockedOM,
+                lockedFUEL: metadata.lockedFUEL,
                 minimumBid: metadata.minimumBid,
                 layer: layer
             });
@@ -347,7 +348,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
                 owner: metadata.owner,
                 parentId: metadata.parentId,
                 field: metadata.field,
-                lockedOM: metadata.lockedOM,
+                lockedFUEL: metadata.lockedFUEL,
                 minimumBid: metadata.minimumBid,
                 layer: layer - i
             });
@@ -386,7 +387,7 @@ contract MandelbrotNFT is ERC1155, Ownable {
                     owner: metadata.owner,
                     parentId: metadata.parentId,
                     field: metadata.field,
-                    lockedOM: metadata.lockedOM,
+                    lockedFUEL: metadata.lockedFUEL,
                     minimumBid: metadata.minimumBid,
                     layer: 0
                 });

@@ -1,5 +1,6 @@
 require("@nomicfoundation/hardhat-toolbox");
 require("hardhat-gas-reporter");
+require("hardhat-contract-sizer");
 require('dotenv').config({ path: __dirname + '/.env' });
 
 /** @type import('hardhat/config').HardhatUserConfig */
@@ -15,5 +16,10 @@ module.exports = {
       accounts: [process.env.PRIVATE_KEY]
     }
   },
-  gasReporter: { enabled: true }
+  gasReporter: { enabled: true },
+  contractSizer: {
+    runOnCompile: true,
+    strict: true,          // fail compile if over limit
+    only: ["Mandelbrot"]
+  }
 };
