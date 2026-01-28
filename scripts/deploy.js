@@ -5,12 +5,15 @@ const NonfungiblePositionManagerJSON = require("@uniswap/v3-periphery/artifacts/
 async function main() {
     const [deployer] = await ethers.getSigners();
     console.log("Deploying contracts with the account:", deployer.address);
-    console.log("Account balance:", (await deployer.getBalance()).toString());
+    console.log(
+        "Account balance:",
+        ethers.formatEther(await ethers.provider.getBalance(deployer.address))
+    );
 
     const Mandelbrot = await ethers.getContractFactory("Mandelbrot");
-    let tx = await Mandelbrot.deploy();
-    await tx.deployed();
-    const mandelbrotAddress = tx.address;
+    const mandelbrot = await Mandelbrot.deploy();
+    await mandelbrot.waitForDeployment();
+    const mandelbrotAddress = mandelbrot.target;
     console.log("mandelbrot address:", mandelbrotAddress);
 
     const uniswapAddress = "0x1238536071E1c677A632429e3655c799b22cDA52";
@@ -45,7 +48,7 @@ async function main() {
     tx = await ERC20.approve(uniswapAddress, 10n ** 18n);
     await tx.wait(1);
 
-    let PositionManagerInterface = new ethers.utils.Interface(NonfungiblePositionManagerJSON.abi);
+    let PositionManagerInterface = new ethers.Interface(NonfungiblePositionManagerJSON.abi);
     const createPoolCalldata = PositionManagerInterface.encodeFunctionData("createAndInitializePoolIfNecessary", [
         mandelbrotAddress,
         wethAddress,
