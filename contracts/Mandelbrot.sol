@@ -126,6 +126,21 @@ contract Mandelbrot is MandelbrotNFT, IERC20Metadata, IERC20Errors {
         if (to == address(0)) {
             revert ERC20InvalidReceiver(address(0));
         }
+        _update(from, to, value);
+    }
+
+    /**
+     * @dev Transfers a `value` amount of tokens from `from` to `to`, or alternatively mints (or burns) if `from`
+     * (or `to`) is the zero address. All customizations to transfers, mints, and burns should be done by overriding
+     * this function.
+     *
+     * Emits a {Transfer} event.
+     */
+    function _update(address from, address to, uint256 value) internal {
+        uint256 fromBalance = super.balanceOf(from, FUEL);
+        if (fromBalance < value) {
+            revert ERC20InsufficientBalance(from, fromBalance, value);
+        }
         (uint256[] memory ids, uint256[] memory values) = _singletonArrays(FUEL, value);
         _update(from, to, ids, values);
         emit Transfer(from, to, value);
