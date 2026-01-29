@@ -1,5 +1,5 @@
 const { expect } = require("chai");
-const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
+const { loadFixture, mine } = require("@nomicfoundation/hardhat-network-helpers");
 
 function forceERC20Interface(token) {
   const interface = token.interface;
@@ -27,7 +27,11 @@ describe("Mandelbrot contract", function () {
     const Mandelbrot = await ethers.getContractFactory("Mandelbrot");
     const [owner] = await ethers.getSigners();
     const mandelbrot = await Mandelbrot.deploy();
-    return { Mandelbrot: Mandelbrot, mandelbrot, owner };
+    await mandelbrot.waitForDeployment();
+    const tx = mandelbrot.deploymentTransaction();
+    const receipt = await tx.wait();
+    const launchBlock = BigInt(receipt.blockNumber);
+    return { Mandelbrot: Mandelbrot, mandelbrot, owner, launchBlock };
   }
 
   async function fundAccounts() {
@@ -47,18 +51,16 @@ describe("Mandelbrot contract", function () {
     const { addr1 } = await loadFixture(fundAccounts);
     const originTokenId = 1;
     const usedFUEL = 15n * 10n ** 18n;
-    const minimumBid = 20n * 10n ** 18n;
     const args = [
       originTokenId,
       addr1.address,
       {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
       usedFUEL,
-      minimumBid
     ];
     const bidId = await mandelbrot.connect(addr1).bid.staticCall(...args);
     let tx = await mandelbrot.connect(addr1).bid(...args);
     await tx.wait();
-    return { bidId, usedFUEL, minimumBid };
+    return { bidId, usedFUEL };
   }
 
   let restore;
@@ -100,7 +102,6 @@ describe("Mandelbrot contract", function () {
       expect(originTokenMetadata.field.bottom).to.equal(0);
       expect(originTokenMetadata.field.top).to.equal(3n * 16n ** 63n);
       expect(originTokenMetadata.lockedFUEL).to.equal(0);
-      expect(originTokenMetadata.minimumBid).to.equal(await this.mandelbrot.BASE_MINIMUM_BID());
     });
   });
 
@@ -111,7 +112,7 @@ describe("Mandelbrot contract", function () {
     });
 
     it("should create a bid", async function () {
-      const { bidId, usedFUEL, minimumBid } = await loadFixture(mint);
+      const { bidId, usedFUEL } = await loadFixture(mint);
       const originTokenId = 1;
 
       expect(bidId).to.equal(2);
@@ -129,20 +130,17 @@ describe("Mandelbrot contract", function () {
       expect(bidMetadata.field.bottom).to.equal(24n * 16n ** 62n);
       expect(bidMetadata.field.top).to.equal(2n * 16n ** 63n);
       expect(bidMetadata.lockedFUEL).to.equal(usedFUEL);
-      expect(bidMetadata.minimumBid).to.equal(minimumBid);
     });
 
     it("should revert with TokenNotFound", async function () {
       const invalidTokenId = 10;
 
       const usedFUEL = 5n * 10n ** 18n;
-      const minimumBid = 20n * 10n ** 18n;
       const args = [
         invalidTokenId,
         this.addr1.address,
         {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
-        minimumBid
       ];
       await expect(this.mandelbrot.connect(this.addr1).bid(...args)).to.be.revertedWithCustomError(this.mandelbrot, "TokenNotFound");
     });
@@ -151,43 +149,24 @@ describe("Mandelbrot contract", function () {
       const originTokenId = 1;
 
       const usedFUEL = 5n * 10n ** 18n;
-      const minimumBid = 20n * 10n ** 18n;
       const args = [
         originTokenId,
         this.addr1.address,
         {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
-        minimumBid
       ];
       await expect(this.mandelbrot.connect(this.addr1).bid(...args)).to.be.revertedWithCustomError(this.mandelbrot, "BidTooLow");
-    });
-
-    it("should revert with MinimumBidTooLow", async function () {
-      const originTokenId = 1;
-
-      const usedFUEL = 15n * 10n ** 18n;
-      const minimumBid = 5n * 10n ** 18n;
-      const args = [
-        originTokenId,
-        this.addr1.address,
-        {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
-        usedFUEL,
-        minimumBid
-      ];
-      await expect(this.mandelbrot.connect(this.addr1).bid(...args)).to.be.revertedWithCustomError(this.mandelbrot, "MinimumBidTooLow");
     });
 
     it("should revert with FieldOutside", async function () {
       const originTokenId = 1;
 
       const usedFUEL = 15n * 10n ** 18n;
-      const minimumBid = 20n * 10n ** 18n;
       const args = [
         originTokenId,
         this.addr1.address,
         {"left": 35n * 16n ** 62n, "right": 4n * 16n ** 63n, "bottom": 35n * 16n ** 62n, "top": 4n * 16n ** 63n},
         usedFUEL,
-        minimumBid
       ];
       await expect(this.mandelbrot.connect(this.addr1).bid(...args)).to.be.revertedWithCustomError(this.mandelbrot, "FieldOutside");
     });
@@ -196,13 +175,11 @@ describe("Mandelbrot contract", function () {
       const originTokenId = 1;
 
       const usedFUEL = 15n * 10n ** 18n;
-      const minimumBid = 20n * 10n ** 18n;
       const args = [
         originTokenId,
         this.addr1.address,
         {"left": 24n * 16n ** 62n, "right": 3n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 3n * 16n ** 63n},
         usedFUEL,
-        minimumBid
       ];
       await expect(this.mandelbrot.connect(this.addr1).bid(...args)).to.be.revertedWithCustomError(this.mandelbrot, "FieldTooLarge");
     });
@@ -211,15 +188,31 @@ describe("Mandelbrot contract", function () {
       const originTokenId = 1;
 
       const usedFUEL = 15n * 10n ** 18n;
-      const minimumBid = 20n * 10n ** 18n;
       const args = [
         originTokenId,
         this.addr4.address,
         {"left": 24n * 16n ** 62n, "right": 2n * 16n ** 63n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
-        minimumBid
       ];
       await expect(this.mandelbrot.connect(this.addr4).bid(...args)).to.be.revertedWithCustomError(this.mandelbrot, "ERC1155InsufficientBalance");
+    });
+
+    it("should cost half after half life", async function () {
+      const baseMinBid = await this.mandelbrot.BASE_MINIMUM_BID();
+      const halvingBlocks = await this.mandelbrot.MINIMUM_BID_HALF_LIFE_BLOCK();
+      const blockNumber = await ethers.provider.getBlockNumber();
+      await mine(this.launchBlock + halvingBlocks - BigInt(blockNumber));
+      const minBid = await this.mandelbrot.minimumBid();
+      expect(minBid).to.equal(baseMinBid / 2n);
+    });
+
+    it("should cost quarter after 3 half lives", async function () {
+      const baseMinBid = await this.mandelbrot.BASE_MINIMUM_BID();
+      const halvingBlocks = await this.mandelbrot.MINIMUM_BID_HALF_LIFE_BLOCK();
+      const blockNumber = await ethers.provider.getBlockNumber();
+      await mine(this.launchBlock + halvingBlocks * 3n - BigInt(blockNumber));
+      const minBid = await this.mandelbrot.minimumBid();
+      expect(minBid).to.equal(baseMinBid / 4n);
     });
   });
 
@@ -230,7 +223,7 @@ describe("Mandelbrot contract", function () {
     });
 
     it("should approve bid", async function () {
-      const { bidId, usedFUEL, minimumBid } = await loadFixture(mint);
+      const { bidId, usedFUEL } = await loadFixture(mint);
       const originTokenId = 1;
 
       let ownerFUELBalance = await this.mandelbrot.balanceOf(this.owner.address);
@@ -256,7 +249,6 @@ describe("Mandelbrot contract", function () {
       expect(tokenMetadata.field.bottom).to.equal(24n * 16n ** 62n);
       expect(tokenMetadata.field.top).to.equal(2n * 16n ** 63n);
       expect(tokenMetadata.lockedFUEL).to.equal(usedFUEL * (100n - BigInt(await this.mandelbrot.MINT_FEE())) / 100n);
-      expect(tokenMetadata.minimumBid).to.equal(minimumBid);
 
       expect((await this.mandelbrot.getBids(originTokenId)).length).to.equal(0);
     });
@@ -269,14 +261,12 @@ describe("Mandelbrot contract", function () {
       expect(ownerFUELBalance).to.equal(expectedOwnerFUELBalance);
 
       const usedFUEL = 10n * 10n ** 18n;
-      const minimumBid = 10n * 10n ** 18n;
       for (i = 0; i < 5; i++) {
         const args = [
           originTokenId,
           this.addr1.address,
           {"left": BigInt(i * 3) * 16n ** 62n, "right": BigInt(i * 3 + 2) * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
           usedFUEL,
-          minimumBid
         ];
         await this.mandelbrot.connect(this.addr1).bid(...args);
       }
@@ -294,7 +284,6 @@ describe("Mandelbrot contract", function () {
         this.addr2.address,
         {"left": 1n * 16n ** 62n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
         usedFUEL,
-        minimumBid
       ];
       await this.mandelbrot.connect(this.addr2).bid(...args);
       await this.mandelbrot.connect(this.addr1).batchApprove([7]);
@@ -326,13 +315,11 @@ describe("Mandelbrot contract", function () {
       expect(addr2FUELBalance).to.equal(expectedAddr2FUELBalance);
 
       const usedFUEL = 10n * 10n ** 18n;
-      const minimumBid = 10n * 10n ** 18n;
       let args = [
         originTokenId,
         this.addr1.address,
         {"left": 0n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
-        minimumBid
       ];
       await this.mandelbrot.connect(this.addr1).bid(...args);
       await this.mandelbrot.batchApprove([2]);
@@ -351,7 +338,6 @@ describe("Mandelbrot contract", function () {
           this.addr2.address,
           {"left": BigInt(i * 3) * 16n ** 61n, "right": BigInt(i * 3 + 2) * 16n ** 61n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
           usedFUEL,
-          minimumBid
         ];
         await this.mandelbrot.connect(this.addr2).bid(...args);
       }
@@ -374,7 +360,6 @@ describe("Mandelbrot contract", function () {
         this.addr2.address,
         {"left": 0n, "right": 2n * 10n ** 15n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
         usedFUEL,
-        minimumBid
       ];
       await this.mandelbrot.connect(this.addr3).bid(...args);
       await this.mandelbrot.connect(this.addr2).batchApprove([6]);
@@ -410,14 +395,12 @@ describe("Mandelbrot contract", function () {
       const originTokenId = 1;
 
       const usedFUEL = 15n * 10n ** 18n;
-      const minimumBid = 20n * 10n ** 18n;
       for (i = 0; i < 6; i++) {
         const args = [
           originTokenId,
           this.addr1.address,
           {"left": BigInt(i * 3) * 16n ** 62n, "right": BigInt(i * 3 + 2) * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
           usedFUEL,
-          minimumBid
         ];
         await this.mandelbrot.connect(this.addr1).bid(...args);
       }
@@ -429,14 +412,12 @@ describe("Mandelbrot contract", function () {
       const originTokenId = 1;
 
       const usedFUEL = 15n * 10n ** 18n;
-      const minimumBid = 20n * 10n ** 18n;
       for (i = 0; i < 6; i++) {
         const args = [
           originTokenId,
           this.addr1.address,
           {"left": BigInt(i * 3) * 16n ** 62n, "right": BigInt(i * 3 + 5) * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
           usedFUEL,
-          minimumBid
         ];
         await this.mandelbrot.connect(this.addr1).bid(...args);
       }
@@ -454,13 +435,11 @@ describe("Mandelbrot contract", function () {
       const originTokenId = 1;
 
       const usedFUEL = 10n * 10n ** 18n;
-      const minimumBid = 10n * 10n ** 18n;
       let args = [
         originTokenId,
         this.addr1.address,
         {"left": 0n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
-        minimumBid
       ];
       await this.mandelbrot.connect(this.addr1).bid(...args);
       await this.mandelbrot.batchApprove([2]);
@@ -470,7 +449,6 @@ describe("Mandelbrot contract", function () {
         this.addr2.address,
         {"left": 0n, "right": 2n * 16n ** 61n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
-        minimumBid
       ];
       await this.mandelbrot.connect(this.addr2).bid(...args);
       await this.mandelbrot.connect(this.addr1).batchApprove([3]);
@@ -480,7 +458,6 @@ describe("Mandelbrot contract", function () {
         this.addr2.address,
         {"left": 0n, "right": 2n * 16n ** 60n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
         usedFUEL,
-        minimumBid
       ];
       await this.mandelbrot.connect(this.addr3).bid(...args);
       await this.mandelbrot.connect(this.addr2).batchApprove([4]);
@@ -492,13 +469,11 @@ describe("Mandelbrot contract", function () {
       const originTokenId = 1;
 
       const usedFUEL = 10n * 10n ** 18n;
-      const minimumBid = 10n * 10n ** 18n;
       let args = [
         originTokenId,
         this.addr1.address,
         {"left": 0n, "right": 2n * 16n ** 62n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
-        minimumBid
       ];
       await this.mandelbrot.connect(this.addr1).bid(...args);
       await this.mandelbrot.batchApprove([2]);
@@ -508,7 +483,6 @@ describe("Mandelbrot contract", function () {
         this.addr1.address,
         {"left": 0n, "right": 2n * 16n ** 61n, "bottom": 24n * 16n ** 62n, "top": 2n * 16n ** 63n},
         usedFUEL,
-        minimumBid
       ];
       await this.mandelbrot.connect(this.addr1).bid(...args);
       await this.mandelbrot.connect(this.addr1).batchApprove([3]);
@@ -518,7 +492,6 @@ describe("Mandelbrot contract", function () {
         this.addr1.address,
         {"left": 0n, "right": 2n * 16n ** 60n, "bottom": 24n * 16n ** 62n, "top": 25n * 16n ** 62n},
         usedFUEL,
-        minimumBid
       ];
       await this.mandelbrot.connect(this.addr1).bid(...args);
 

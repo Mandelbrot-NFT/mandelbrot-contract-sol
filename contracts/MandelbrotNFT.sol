@@ -7,11 +7,15 @@ import {ERC1155Supply} from "@openzeppelin/contracts/token/ERC1155/extensions/ER
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 // import "hardhat/console.sol";
 
+uint256 constant WAD = 1e18;
+
 abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
     uint256 public constant FUEL = 0;
 
-    uint256 public constant TOTAL_SUPPLY = 10000 * 10 ** 18;
-    uint256 public constant BASE_MINIMUM_BID = 10 * 10 ** 18;
+    uint256 public constant TOTAL_SUPPLY = 10_000 * WAD;
+    uint256 public constant BASE_MINIMUM_BID = 10 * WAD;
+    uint256 public constant MINIMUM_BID_HALF_LIFE_BLOCK = 2_629_800; // 1 month
+
     uint256 public constant MAX_CHILDREN = 5;
     uint256 public constant MAXIMUM_FIELD_PORTION = 10; // 10%
     uint256 public constant MINT_FEE = 40;
@@ -29,7 +33,6 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
         uint256 parentId;
         Field field;
         uint256 lockedFUEL;
-        uint256 minimumBid;
     }
 
     struct MetadataView {
@@ -38,10 +41,10 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
         uint256 parentId;
         Field field;
         uint256 lockedFUEL;
-        uint256 minimumBid;
         uint256 layer;
     }
 
+    uint256 private immutable _launchBlock;
     uint256 private _tokenIds;
     mapping(uint256 => Metadata) private _metadata;
     mapping(uint256 => uint256[]) private _children;
@@ -52,7 +55,6 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
     error TokenNotEmpty(); // Cannot burn token if it has children
     error BidNotFound();
     error BidTooLow(); // Bid must exceed or equal minimum bid price
-    error MinimumBidTooLow(); // Child's minimum bid has to be at least as much as parent's
     error TooManyChildTokens(); // A maximum of MAX_CHILDREN child tokens can be minted
     error NoRightsToApproveBid(); // Only the owner of parent token can approve the bid
     error NoRightsToDeleteBid(); // Only the bid creator can delete it
@@ -62,9 +64,10 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
     error NoCommonParent(); // Bids being approved are inside of different tokens
 
     constructor() ERC1155("https://mandelbrot-service.onrender.com/{id}") Ownable(_msgSender()) {
+        _launchBlock = block.number;
         _mint(_msgSender(), FUEL, TOTAL_SUPPLY, "");
         Field memory field = Field({left: 0, bottom: 0, right: 3 * 16 ** 63, top: 3 * 16 ** 63});
-        _mintInternal(0, _msgSender(), field, 0, BASE_MINIMUM_BID);
+        _mintInternal(0, _msgSender(), field, 0);
     }
 
     modifier tokenExists(uint256 tokenId) {
@@ -125,14 +128,12 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
         uint256 parentId,
         address recipient,
         Field memory field,
-        uint256 lockedFUEL,
-        uint256 minimumBid
+        uint256 lockedFUEL
     ) internal returns (uint256) {
-        if (minimumBid < _metadata[parentId].minimumBid) revert MinimumBidTooLow();
         uint256 newItemId = ++_tokenIds;
         _mint(recipient, newItemId, 1, "");
         _metadata[newItemId] =
-            Metadata({owner: recipient, parentId: parentId, field: field, lockedFUEL: lockedFUEL, minimumBid: minimumBid});
+            Metadata({owner: recipient, parentId: parentId, field: field, lockedFUEL: lockedFUEL});
         return newItemId;
     }
 
@@ -149,14 +150,26 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
         delete _metadata[bidId];
     }
 
-    function bid(uint256 parentId, address recipient, Field calldata field, uint256 amount, uint256 minimumBid)
+    function minimumBid() public view returns (uint256) {
+        uint256 elapsedBlocks = block.number - _launchBlock;
+        uint256 ratio = (elapsedBlocks * WAD) / MINIMUM_BID_HALF_LIFE_BLOCK;
+
+        uint256 denom;
+        if (elapsedBlocks <= MINIMUM_BID_HALF_LIFE_BLOCK) {
+            denom = WAD + ((ratio * ratio) / WAD) * ratio / WAD;
+        } else {
+            denom = WAD + ratio;
+        }
+
+        return (BASE_MINIMUM_BID * WAD) / denom;
+    }
+
+    function bid(uint256 parentId, address recipient, Field calldata field, uint256 amount)
         external
         tokenExists(parentId)
         returns (uint256)
     {
-        uint256 parentMinimumBid = _metadata[parentId].minimumBid;
-        if (amount < parentMinimumBid) revert BidTooLow();
-        if (minimumBid < parentMinimumBid) revert MinimumBidTooLow();
+        if (amount < minimumBid()) revert BidTooLow();
         _validateBidField(parentId, field);
 
         _burn(_msgSender(), FUEL, amount);
@@ -164,7 +177,7 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
 
         uint256 newBidId = ++_tokenIds;
         _metadata[newBidId] =
-            Metadata({owner: recipient, parentId: parentId, field: field, lockedFUEL: amount, minimumBid: minimumBid});
+            Metadata({owner: recipient, parentId: parentId, field: field, lockedFUEL: amount});
         _bidIds[parentId].push(newBidId);
         return newBidId;
     }
@@ -297,7 +310,6 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
                     parentId: parentId,
                     field: bid_.field,
                     lockedFUEL: bid_.lockedFUEL,
-                    minimumBid: bid_.minimumBid,
                     layer: layer
                 }));
         }
@@ -313,7 +325,6 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
             parentId: metadata.parentId,
             field: metadata.field,
             lockedFUEL: metadata.lockedFUEL,
-            minimumBid: metadata.minimumBid,
             layer: layer
         });
     }
@@ -330,7 +341,6 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
                 parentId: parentId,
                 field: metadata.field,
                 lockedFUEL: metadata.lockedFUEL,
-                minimumBid: metadata.minimumBid,
                 layer: layer
             });
         }
@@ -349,7 +359,6 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
                 parentId: metadata.parentId,
                 field: metadata.field,
                 lockedFUEL: metadata.lockedFUEL,
-                minimumBid: metadata.minimumBid,
                 layer: layer - i
             });
             ancestorId = metadata.parentId;
@@ -388,7 +397,6 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
                     parentId: metadata.parentId,
                     field: metadata.field,
                     lockedFUEL: metadata.lockedFUEL,
-                    minimumBid: metadata.minimumBid,
                     layer: 0
                 });
                 if (balanceOf(owner, i) == 1) {
@@ -400,10 +408,5 @@ abstract contract MandelbrotNFT is ERC1155, ERC1155Supply, Ownable {
                 }
             }
         }
-    }
-
-    function setMinimumBid(uint256 tokenId, uint256 minimumBid) external tokenExists(tokenId) {
-        if (minimumBid < _metadata[_metadata[tokenId].parentId].minimumBid) revert MinimumBidTooLow();
-        _metadata[tokenId].minimumBid = minimumBid;
     }
 }
